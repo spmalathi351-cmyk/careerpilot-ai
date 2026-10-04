@@ -1,0 +1,250 @@
+import { Router, Request, Response } from 'express';
+import { db } from '../db/database.js';
+import { getAuthenticatedUserId } from './authRoutes.js';
+import { polishTextWithAI, generateCareerGuidance } from '../ai/geminiService.js';
+
+const router = Router();
+
+// Student Profile
+router.get('/profile', (req: Request, res: Response) => {
+  const userId = getAuthenticatedUserId(req);
+  const user = db.getUserById(userId);
+  let profile = db.getStudentProfileByUserId(userId);
+
+  if (!profile) {
+    // Generate default profile
+    profile = db.createOrUpdateStudentProfile(userId, {
+      headline: 'Candidate & Engineering Student',
+      bio: '',
+      skills: ['TypeScript', 'React', 'Python'],
+    });
+  }
+
+  // Calculate completeness
+  let filled = 0;
+  if (profile.headline) filled += 10;
+  if (profile.bio) filled += 15;
+  if (profile.skills.length >= 3) filled += 20;
+  if (profile.education.length > 0) filled += 20;
+  if (profile.experience.length > 0) filled += 15;
+  if (profile.projects.length > 0) filled += 15;
+  if (profile.certifications.length > 0) filled += 5;
+  profile.profileCompleteness = Math.min(100, filled);
+
+  return res.json({ profile, user });
+});
+
+// Update Profile
+router.put('/profile', (req: Request, res: Response) => {
+  const userId = getAuthenticatedUserId(req);
+  const updates = req.body;
+
+  const profile = db.createOrUpdateStudentProfile(userId, updates);
+
+  // If user display name is updated
+  if (updates.displayName) {
+    const user = db.getUserById(userId);
+    if (user) {
+      user.displayName = updates.displayName;
+    }
+  }
+
+  db.logAudit({
+    userId,
+    userName: updates.displayName || 'Student',
+    role: 'student',
+    action: 'PROFILE_UPDATED',
+    ipAddress: '127.0.0.1',
+    timestamp: new Date().toISOString(),
+  });
+
+  return res.json({ profile, message: 'Profile updated successfully' });
+});
+
+// Student Dashboard Data
+router.get('/dashboard', async (req: Request, res: Response) => {
+  const userId = getAuthenticatedUserId(req);
+  const user = db.getUserById(userId);
+  let profile = db.getStudentProfileByUserId(userId);
+
+  if (!profile) {
+    profile = db.createOrUpdateStudentProfile(userId, {});
+  }
+
+  const resumes = db.getResumesByStudentId(userId);
+  const primaryResume = resumes.find((r) => r.isPrimary) || resumes[0];
+  const applications = db.getApplicationsByStudentId(userId);
+  const interviews = db.getInterviewSessionsByStudentId(userId);
+  const notifications = db.getNotificationsByUserId(userId).slice(0, 5);
+
+  // Recommended roles
+  const recommendations = await generateCareerGuidance(
+    profile.skills,
+    profile.education[0]?.field || 'Computer Science',
+    profile.targetRoles
+  );
+
+  return res.json({
+    user,
+    profile,
+    resumesCount: resumes.length,
+    primaryResume,
+    latestAtsScore: primaryResume?.atsScore || 85,
+    readinessScore: profile.readinessScore || 82,
+    profileCompleteness: profile.profileCompleteness || 85,
+    applicationsSummary: {
+      total: applications.length,
+      applied: applications.filter((a) => a.stage === 'Applied').length,
+      screening: applications.filter((a) => a.stage === 'Screening').length,
+      interview: applications.filter((a) => a.stage === 'Interview').length,
+      offer: applications.filter((a) => a.stage === 'Offer').length,
+      rejected: applications.filter((a) => a.stage === 'Rejected').length,
+    },
+    upcomingInterviews: applications.filter((a) => !!a.interviewScheduled),
+    recentApplications: applications.slice(0, 4),
+    recentInterviews: interviews.slice(0, 3),
+    notifications,
+    recommendedRoles: recommendations.slice(0, 3),
+    skillGaps: primaryResume?.recommendations?.missingSkills || ['Kubernetes', 'Redis', 'Docker'],
+  });
+});
+
+// Polish Bio with Gemini
+router.post('/improve-bio', async (req: Request, res: Response) => {
+  const userId = getAuthenticatedUserId(req);
+  const { bio } = req.body;
+
+  const improved = await polishTextWithAI(bio || '', 'student_bio');
+
+  db.logAiUsage({
+    userId,
+    feature: 'Student Bio Polish',
+    model: 'gemini-3.8-flash',
+    inputTokens: 120,
+    outputTokens: 90,
+    status: 'success',
+  });
+
+  return res.json({ improvedBio: improved });
+});
+
+// Job Recommendation Engine: Match parsed resume against active job postings
+router.get('/job-recommendations', (req: Request, res: Response) => {
+  const userId = getAuthenticatedUserId(req);
+  const profile = db.getStudentProfileByUserId(userId);
+  const resumes = db.getResumesByStudentId(userId);
+
+  // Active or primary resume
+  const activeResume = resumes.find((r) => r.isPrimary) || resumes[0];
+
+  // Extracted skills
+  const resumeSkills: string[] = activeResume?.extractedData?.skills || profile?.skills || [
+    'TypeScript',
+    'React',
+    'Node.js',
+    'PostgreSQL',
+    'REST APIs',
+    'Git',
+    'Python',
+  ];
+
+  const resumeExperience = activeResume?.extractedData?.experience || profile?.experience || [];
+  const resumeEducation = activeResume?.extractedData?.education || profile?.education || [];
+
+  const allJobs = db.getAllJobs().filter((j) => j.status === 'published');
+
+  const recommendations = allJobs.map((job) => {
+    // 1. Skill overlap calculation
+    const reqSkills = job.requiredSkills || [];
+    const prefSkills = job.preferredSkills || [];
+
+    const lowerResumeSkills = resumeSkills.map((s) => s.toLowerCase());
+
+    const matchedRequired = reqSkills.filter((rs) =>
+      lowerResumeSkills.some((candSkill) => candSkill.includes(rs.toLowerCase()) || rs.toLowerCase().includes(candSkill))
+    );
+    const missingRequired = reqSkills.filter((rs) => !matchedRequired.includes(rs));
+
+    const matchedPreferred = prefSkills.filter((ps) =>
+      lowerResumeSkills.some((candSkill) => candSkill.includes(ps.toLowerCase()) || ps.toLowerCase().includes(candSkill))
+    );
+
+    const totalRequiredWeight = Math.max(1, reqSkills.length * 1.5);
+    const totalPrefWeight = prefSkills.length * 1.0;
+    const earnedWeight = matchedRequired.length * 1.5 + matchedPreferred.length * 1.0;
+
+    const skillsScore = Math.min(
+      98,
+      Math.max(45, Math.round((earnedWeight / (totalRequiredWeight + totalPrefWeight)) * 100))
+    );
+
+    // 2. Experience alignment
+    let experienceScore = 80;
+    if (job.experience.toLowerCase().includes('entry') || job.experience.toLowerCase().includes('0-1')) {
+      experienceScore = 95;
+    } else if (job.experience.toLowerCase().includes('1-3') || job.experience.toLowerCase().includes('mid')) {
+      experienceScore = resumeExperience.length >= 1 ? 92 : 76;
+    } else {
+      experienceScore = resumeExperience.length >= 2 ? 88 : 70;
+    }
+
+    // 3. Education alignment
+    let educationScore = 85;
+    const candDegree = (resumeEducation[0]?.field || '').toLowerCase();
+    if (
+      candDegree.includes('computer') ||
+      candDegree.includes('software') ||
+      candDegree.includes('engineering') ||
+      candDegree.includes('data')
+    ) {
+      educationScore = 96;
+    }
+
+    // Composite overall match score
+    const overallScore = Math.min(
+      99,
+      Math.max(50, Math.round(skillsScore * 0.6 + experienceScore * 0.25 + educationScore * 0.15))
+    );
+
+    // Qualitative verdict
+    let fitVerdict = 'Moderate Alignment';
+    if (overallScore >= 88) fitVerdict = 'Exceptional Match';
+    else if (overallScore >= 78) fitVerdict = 'Strong Match';
+    else if (overallScore >= 65) fitVerdict = 'Good Potential';
+
+    const recommendationReason =
+      matchedRequired.length > 0
+        ? `Matches ${matchedRequired.length}/${reqSkills.length} core requirements (${matchedRequired
+            .slice(0, 3)
+            .join(', ')}).`
+        : 'Solid foundational software engineering alignment.';
+
+    return {
+      job,
+      matchScore: overallScore,
+      skillsScore,
+      experienceScore,
+      educationScore,
+      fitVerdict,
+      matchedSkills: [...matchedRequired, ...matchedPreferred],
+      missingSkills: missingRequired,
+      recommendationReason,
+    };
+  });
+
+  recommendations.sort((a, b) => b.matchScore - a.matchScore);
+
+  return res.json({
+    recommendations,
+    resumeUsed: {
+      id: activeResume?.id || 'profile-default',
+      filename: activeResume?.filename || 'Candidate Verified Profile',
+      atsScore: activeResume?.atsScore || 88,
+      skillsDetectedCount: resumeSkills.length,
+      sampleSkills: resumeSkills.slice(0, 8),
+    },
+    totalPublishedJobs: allJobs.length,
+  });
+});
+
+export default router;

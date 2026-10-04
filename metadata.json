@@ -1,0 +1,11 @@
+{
+  "name": "CareerPilot AI — Intelligent Career Guidance & Recruitment Platform",
+  "description": "Intelligent full-stack career guidance and recruitment platform with AI resume parsing, ATS scoring, career roadmaps, mock video interviews, and recruiter talent pipeline.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
