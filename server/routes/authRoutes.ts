@@ -3,16 +3,49 @@ import { db } from '../db/database.js';
 
 const router = Router();
 
-// Helper to extract session or auth header (supports Bearer token or userId query/header)
-export function getAuthenticatedUserId(req: Request): string {
+// Helper to extract session or auth header (supports Bearer token or x-user-id)
+export function getAuthenticatedUserId(req: Request): string | null {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.substring(7);
+    const token = authHeader.substring(7).trim();
+    if (token) return token;
   }
   const customUser = req.headers['x-user-id'] as string;
-  if (customUser) return customUser;
-  // Default to student demo user if nothing supplied in development
-  return 'user-student-1';
+  if (customUser && customUser.trim()) return customUser.trim();
+  return null;
+}
+
+// Middleware: Require valid authenticated user
+export function requireAuth(req: Request, res: Response, next: () => void) {
+  const userId = getAuthenticatedUserId(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized: Authentication required' });
+  }
+  const user = db.getUserById(userId);
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid or expired session' });
+  }
+  (req as any).user = user;
+  (req as any).userId = user.id;
+  next();
+}
+
+// Middleware: Require specific user role(s)
+export function requireRole(allowedRoles: string[]) {
+  return (req: Request, res: Response, next: () => void) => {
+    const user = (req as any).user || db.getUserById(getAuthenticatedUserId(req) || '');
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized: Authentication required' });
+    }
+    (req as any).user = user;
+    (req as any).userId = user.id;
+    if (!allowedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: `Forbidden: Access requires one of [${allowedRoles.join(', ')}] role`,
+      });
+    }
+    next();
+  };
 }
 
 // Student Registration
@@ -188,6 +221,9 @@ router.post('/login/admin', (req: Request, res: Response) => {
 // Current User Me
 router.get('/me', (req: Request, res: Response) => {
   const userId = getAuthenticatedUserId(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized: Authentication required' });
+  }
   const user = db.getUserById(userId);
   if (!user) {
     return res.status(401).json({ error: 'Unauthorized or session expired' });

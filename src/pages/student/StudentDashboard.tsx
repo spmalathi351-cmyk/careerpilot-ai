@@ -68,7 +68,7 @@ export const StudentDashboard: React.FC = () => {
               AI Career Copilot Active
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Welcome back, {user?.displayName || 'Alex'}!
+              Welcome back, {user?.displayName || 'Student'}!
             </h1>
             <p className="text-xs sm:text-sm text-indigo-200 max-w-xl">
               Your profile is {completeness}% complete. Your primary resume is calibrated with an estimated ATS score of{' '}

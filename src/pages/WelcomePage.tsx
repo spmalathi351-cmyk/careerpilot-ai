@@ -1,8 +1,6 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { Link } from 'react-router-dom';
 import {
-  Compass,
   FileCheck2,
   Sparkles,
   Target,
@@ -11,22 +9,11 @@ import {
   ArrowRight,
   Shield,
   Layers,
-  CheckCircle,
   Briefcase,
   GraduationCap,
 } from 'lucide-react';
 
 export const WelcomePage: React.FC = () => {
-  const { switchDemoRole, user } = useAuth();
-  const navigate = useNavigate();
-
-  const handleQuickDemo = async (role: 'student' | 'recruiter' | 'admin') => {
-    await switchDemoRole(role);
-    if (role === 'student') navigate('/student/dashboard');
-    else if (role === 'recruiter') navigate('/recruiter/dashboard');
-    else navigate('/admin/dashboard');
-  };
-
   return (
     <div className="space-y-16 pb-12">
       {/* Hero Section */}
@@ -34,74 +21,77 @@ export const WelcomePage: React.FC = () => {
         <div className="absolute top-0 right-0 -mt-12 -mr-12 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 -mb-12 -ml-12 w-80 h-80 bg-violet-500/15 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold mb-6">
-            <Sparkles className="w-3.5 h-3.5" />
-            Empowered by Gemini 3.8 Flash AI
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-10">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-200 text-xs font-semibold mb-6">
+              <img src="/careerpilot-mark.png" alt="CareerPilot" className="w-4 h-4 rounded-full object-contain" />
+              <span>Official CareerPilot AI Intelligence Platform</span>
+            </div>
+
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight text-white mb-6">
+              Intelligent Career Guidance &amp; Modern Recruitment
+            </h1>
+
+            <p className="text-base sm:text-lg text-slate-300 mb-10 leading-relaxed">
+              CareerPilot AI bridges the divide between aspiring candidates and enterprise hiring teams.
+              Harness real-time ATS diagnostic scoring, custom 30-60-90 career roadmaps, interactive AI mock
+              interviews, and structured candidate discovery pipelines.
+            </p>
+
+            {/* Clean Role Choice Cards */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-indigo-300 mb-4">
+                Select Your Role to Continue
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+                <Link
+                  to="/auth/student/login"
+                  className="group flex items-center justify-between p-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-sm transition-all shadow-lg shadow-indigo-600/30"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                      <GraduationCap className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-extrabold text-base leading-tight">Student / Candidate</p>
+                      <p className="text-xs text-indigo-200 font-normal mt-0.5">Sign in to Student Portal</p>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform flex-shrink-0" />
+                </Link>
+
+                <Link
+                  to="/auth/recruiter/login"
+                  className="group flex items-center justify-between p-5 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-white rounded-2xl font-bold text-sm transition-all shadow-md"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-slate-700 flex items-center justify-center text-indigo-400 flex-shrink-0">
+                      <Briefcase className="w-6 h-6" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-extrabold text-base leading-tight">Recruiter</p>
+                      <p className="text-xs text-slate-400 font-normal mt-0.5">Sign in to Recruiter Portal</p>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform flex-shrink-0" />
+                </Link>
+              </div>
+            </div>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight text-white mb-6">
-            Intelligent Career Guidance &amp; Modern Recruitment
-          </h1>
-
-          <p className="text-base sm:text-lg text-slate-300 mb-8 leading-relaxed">
-            CareerPilot AI bridges the divide between aspiring candidates and enterprise hiring teams.
-            Harness real-time ATS diagnostic scoring, custom 30-60-90 career roadmaps, interactive AI mock
-            video interviews, and intelligent candidate talent pipelines.
-          </p>
-
-          {/* Primary Action Choice */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
-            <button
-              onClick={() => handleQuickDemo('student')}
-              className="group flex items-center justify-between p-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-sm transition-all shadow-lg shadow-indigo-600/30"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                  <GraduationCap className="w-5 h-5 text-white" />
-                </div>
-                <div className="text-left">
-                  <p className="font-extrabold text-base">Candidate Portal</p>
-                  <p className="text-xs text-indigo-200 font-normal">Explore as Demo Student</p>
-                </div>
-              </div>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
-
-            <button
-              onClick={() => handleQuickDemo('recruiter')}
-              className="group flex items-center justify-between p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-2xl font-bold text-sm transition-all shadow-md"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-slate-700 flex items-center justify-center text-indigo-400">
-                  <Briefcase className="w-5 h-5" />
-                </div>
-                <div className="text-left">
-                  <p className="font-extrabold text-base">Recruiter Portal</p>
-                  <p className="text-xs text-slate-400 font-normal">Explore as Talent Lead</p>
-                </div>
-              </div>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
-          </div>
-
-          {/* Direct Auth Links */}
-          <div className="mt-8 flex flex-wrap items-center gap-4 text-xs text-slate-400">
-            <span>Or authenticate manually:</span>
-            <Link to="/auth/student/login" className="text-indigo-400 hover:text-indigo-300 font-semibold underline">
-              Student Sign In
-            </Link>
-            <span>•</span>
-            <Link to="/auth/recruiter/login" className="text-indigo-400 hover:text-indigo-300 font-semibold underline">
-              Recruiter Sign In
-            </Link>
-            <span>•</span>
-            <button
-              onClick={() => handleQuickDemo('admin')}
-              className="text-slate-400 hover:text-white font-semibold flex items-center gap-1"
-            >
-              <Shield className="w-3.5 h-3.5" /> Admin Console
-            </button>
+          {/* Official Brand Showcase Card */}
+          <div className="hidden lg:flex flex-col items-center justify-center p-6 bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl shadow-xl flex-shrink-0 select-none">
+            <div className="w-40 h-40 rounded-2xl bg-white p-3 shadow-lg flex items-center justify-center ring-4 ring-indigo-500/20">
+              <img
+                src="/careerpilot-logo-full.png"
+                alt="CareerPilot AI Official Brand"
+                className="w-full h-full object-contain rounded-xl"
+              />
+            </div>
+            <p className="mt-3.5 text-sm font-extrabold text-white tracking-wide">CareerPilot AI</p>
+            <p className="text-[10px] text-indigo-300 font-semibold tracking-widest uppercase mt-0.5">
+              Guide · Match · Grow
+            </p>
           </div>
         </div>
       </section>
@@ -113,7 +103,7 @@ export const WelcomePage: React.FC = () => {
             Complete End-to-End Career Acceleration Architecture
           </h2>
           <p className="text-sm text-slate-600 mt-2">
-            Every screen, algorithm, and server endpoint is actively functional with Gemini 3.8 Flash AI and local fallbacks.
+            Every screen, algorithm, and server endpoint is actively functional with deep AI integration and persistent data models.
           </p>
         </div>
 
@@ -125,7 +115,7 @@ export const WelcomePage: React.FC = () => {
             <h3 className="text-base font-bold text-slate-900 mb-2">AI Resume Parsing &amp; Extraction</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               Upload PDF or DOCX resumes. Extracts work experience, education, validated skills, and project metrics into
-              structured JSON schemas.
+              structured schemas with version history tracking.
             </p>
           </div>
 
@@ -136,7 +126,7 @@ export const WelcomePage: React.FC = () => {
             <h3 className="text-base font-bold text-slate-900 mb-2">ATS Simulator &amp; Line Inspector</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               Simulates modern Applicant Tracking Systems. Calculates keyword match density, section formatting scores, and
-              line-by-line inspection with job descriptions.
+              line-by-line inspection with target job requirements.
             </p>
           </div>
 
@@ -177,66 +167,10 @@ export const WelcomePage: React.FC = () => {
             <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center mb-4">
               <Shield className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-slate-900 mb-2">Admin Telemetry &amp; Audit Logs</h3>
+            <h3 className="text-base font-bold text-slate-900 mb-2">Secure Role-Based Architecture</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Live system health telemetry, AI token consumption logs, latency benchmarks, and immutable platform audit tracking.
+              Complete data isolation between candidate and recruiter domains with server-side ownership verification and audit logging.
             </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Demo Credentials Helper Box */}
-      <section className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">Pre-Configured Test &amp; Demo Accounts</h3>
-            <p className="text-xs text-slate-600 mt-1">
-              Test accounts come pre-loaded with realistic resumes, ATS scores, job postings, and active interview sessions.
-            </p>
-          </div>
-          <span className="text-xs font-semibold px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
-            Database Seeded &amp; Active
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6">
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-            <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Candidate / Student</p>
-            <p className="text-sm font-semibold text-slate-900 mt-1">Alex Johnson</p>
-            <p className="text-xs text-slate-600 font-mono mt-1">student@careerpilot.ai</p>
-            <p className="text-xs text-slate-400 font-mono">Password: student123</p>
-            <button
-              onClick={() => handleQuickDemo('student')}
-              className="mt-3 w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-colors"
-            >
-              Enter as Student
-            </button>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-            <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Technical Recruiter</p>
-            <p className="text-sm font-semibold text-slate-900 mt-1">Sarah Lin</p>
-            <p className="text-xs text-slate-600 font-mono mt-1">recruiter@careerpilot.ai</p>
-            <p className="text-xs text-slate-400 font-mono">Password: recruiter123</p>
-            <button
-              onClick={() => handleQuickDemo('recruiter')}
-              className="mt-3 w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold transition-colors"
-            >
-              Enter as Recruiter
-            </button>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-            <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Platform Admin</p>
-            <p className="text-sm font-semibold text-slate-900 mt-1">System Administrator</p>
-            <p className="text-xs text-slate-600 font-mono mt-1">admin@careerpilot.ai</p>
-            <p className="text-xs text-slate-400 font-mono">Password: admin123</p>
-            <button
-              onClick={() => handleQuickDemo('admin')}
-              className="mt-3 w-full py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-semibold transition-colors"
-            >
-              Enter as Admin
-            </button>
           </div>
         </div>
       </section>

@@ -1009,3 +1009,309 @@ Return valid JSON:
     ],
   };
 }
+
+export interface ChatMessageParam {
+  role: 'user' | 'model';
+  content: string;
+}
+
+export interface ChatUserContext {
+  userId?: string;
+  role?: string;
+  name?: string;
+  email?: string;
+  headline?: string;
+  skills?: string[];
+  education?: string;
+  primaryResume?: {
+    id?: string;
+    filename: string;
+    atsScore: number;
+    keywordScore?: number;
+    formattingScore?: number;
+    extractedSkills?: string[];
+    missingSkills?: string[];
+    recommendations?: string[];
+    formattingIssues?: string[];
+  };
+  applicationsCount?: number;
+  roadmapSummary?: string;
+  recentMockScore?: number;
+  companyName?: string;
+  openJobsCount?: number;
+}
+
+/**
+ * Conversational Career Chatbot with Gemini 3.8 Flash
+ */
+export async function generateChatbotResponse(
+  message: string,
+  history: ChatMessageParam[] = [],
+  context?: ChatUserContext
+): Promise<{ reply: string; suggestions: string[]; source: 'gemini' | 'fallback' }> {
+  const ai = getGenAI();
+
+  // Context summary text for system prompt
+  let contextPrompt = '';
+  if (context && context.role === 'student') {
+    contextPrompt = `
+CURRENT LOGGED-IN CANDIDATE DATA:
+- Name: ${context.name || 'Candidate'}
+- Headline: ${context.headline || 'Software Engineering Student'}
+- Profile Skills: ${(context.skills || []).join(', ') || 'TypeScript, React, Python'}
+- Education: ${context.education || 'B.S. in Computer Science'}
+${
+  context.primaryResume
+    ? `- Primary Resume: "${context.primaryResume.filename}"
+- Overall ATS Score: ${context.primaryResume.atsScore}/100 (Keyword Score: ${context.primaryResume.keywordScore || 86}/100, Formatting: ${context.primaryResume.formattingScore || 94}/100)
+- Verified Extracted Skills: ${(context.primaryResume.extractedSkills || []).join(', ')}
+- Priority Missing Skills from Resume Diagnostic: ${(context.primaryResume.missingSkills || []).join(', ')}
+- Resume Diagnostic Recommendations: ${(context.primaryResume.recommendations || []).slice(0, 3).join('; ')}`
+    : '- Resume: No resume uploaded yet.'
+}
+- Active Applications in Pipeline: ${context.applicationsCount || 0}
+- Career Roadmap: ${context.roadmapSummary || '30-60-90 Day Milestone plan generated'}
+${context.recentMockScore ? `- Recent Mock Interview Score: ${context.recentMockScore}%` : ''}
+`;
+  } else if (context && context.role === 'recruiter') {
+    contextPrompt = `
+CURRENT LOGGED-IN RECRUITER DATA:
+- Name: ${context.name || 'Recruiter'}
+- Company: ${context.companyName || 'CareerPilot Demo Technologies'}
+- Active Published Positions: ${context.openJobsCount || 4}
+`;
+  }
+
+  const systemInstruction = `You are CareerPilot Copilot, an elite AI Career Advisor and Technical Mentor embedded in CareerPilot AI — an intelligent career acceleration and hiring intelligence platform.
+
+Your mission:
+Empower candidates to land high-impact technical roles and help recruiters identify top engineering talent.
+
+Core Competencies:
+1. Career Path & Role Guidance: Provide nuanced guidance for software engineering, data science, machine learning, cloud/DevOps, frontend, and full-stack disciplines.
+2. Skill-Gap Analysis: When a user asks what they need to learn for a target role (e.g., Data Scientist, Backend Engineer), compare it against their current skills, highlight priority missing competencies, and outline a structured learning order.
+3. Resume & ATS Optimization: Provide tangible recommendations to elevate bullet points using the Google X-Y-Z formula (Accomplished [X] as measured by [Y] by doing [Z]), fix formatting, and pass applicant tracking systems.
+4. Technical Concept Explanations: Explain challenging CS, AI, distributed systems, and web concepts with crystal clarity and brief code snippets if helpful.
+5. Project Ideas & Portfolios: Propose distinct, production-grade portfolio projects that demonstrate real architectural depth (avoiding cookie-cutter tutorial apps).
+6. Interview Preparation: Offer STAR-method behavioral advice, system design principles, and technical screen drill questions.
+7. 30/60/90-Day Roadmaps: Detail phased milestones with concrete deliverables.
+
+${contextPrompt}
+
+GUIDELINES:
+- When candidate profile data or resume data is provided above, directly reference and personalize your response around their current stack, their ATS score, and their specific gaps!
+- Format with clean, readable Markdown: use bullet points, bold keywords, and clean headings.
+- Be encouraging, realistic, rigorous, and direct. Avoid fluffy preamble.
+`;
+
+  if (ai) {
+    try {
+      // Build contents array respecting multi-turn structure
+      const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+
+      // Add recent history (up to last 10 messages for context)
+      const recentHistory = history.slice(-10);
+      for (const msg of recentHistory) {
+        contents.push({
+          role: msg.role === 'model' ? 'model' : 'user',
+          parts: [{ text: msg.content }],
+        });
+      }
+
+      // Add current message
+      contents.push({
+        role: 'user',
+        parts: [{ text: message }],
+      });
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+        },
+      });
+
+      const reply = response.text || '';
+      if (reply.trim().length > 0) {
+        // Generate contextual quick reply suggestions
+        const suggestions = generateQuickSuggestions(message, context?.role);
+        return { reply, suggestions, source: 'gemini' };
+      }
+    } catch (err) {
+      console.warn('Gemini chat response fallback:', err);
+    }
+  }
+
+  // High-fidelity personalized fallback
+  const fallbackReply = generateFallbackChatReply(message, context);
+  const suggestions = generateQuickSuggestions(message, context?.role);
+
+  return {
+    reply: fallbackReply,
+    suggestions,
+    source: 'fallback',
+  };
+}
+
+/**
+ * Intelligent context-aware fallback response generator
+ */
+function generateFallbackChatReply(message: string, context?: ChatUserContext): string {
+  const query = message.toLowerCase();
+  const studentName = context?.name || 'there';
+  const currentSkills = context?.skills || ['TypeScript', 'React', 'Python', 'PostgreSQL'];
+  const missingSkills = context?.primaryResume?.missingSkills || ['Docker', 'Redis', 'Kubernetes', 'CI/CD'];
+  const atsScore = context?.primaryResume?.atsScore || 88;
+
+  // 1. Data Science / AI / ML Transition
+  if (query.includes('data scien') || query.includes('machine learning') || query.includes('ai engineer')) {
+    const overlapping = currentSkills.filter((s) =>
+      ['python', 'sql', 'postgresql', 'math', 'pandas', 'numpy'].some((ds) => s.toLowerCase().includes(ds))
+    );
+    const needed = ['Pandas & NumPy', 'Scikit-Learn', 'PyTorch / TensorFlow', 'Vector DBs (Chroma/Pinecone)', 'MLOps & Fastify/FastAPI'];
+
+    return `### 🎯 Transitioning to Data Science & Applied AI
+
+Hey **${studentName}**, let's analyze your path to becoming a **Data Scientist / Applied AI Engineer** based on your current background:
+
+#### 1. Current Strengths & Overlap
+You already possess strong foundational skills: **${overlapping.length ? overlapping.join(', ') : currentSkills.slice(0, 3).join(', ')}**. Your background gives you an advantage in data manipulation, API integration, and structured querying.
+
+#### 2. Priority Skill Gaps
+To break into modern data science teams, prioritize these core proficiencies:
+- **Priority 1 (Data Wrangling & Exploration)**: Python Data Stack (*Pandas, NumPy, Polars*) and advanced SQL window functions.
+- **Priority 2 (Statistical Modeling)**: Regression, Classification, Random Forests with *Scikit-Learn*.
+- **Priority 3 (Deep Learning & GenAI)**: *PyTorch*, transformer architectures, and RAG pipelines with Vector Databases.
+- **Priority 4 (Deployment & Serving)**: Packaging ML inference models behind *FastAPI* in Docker containers.
+
+#### 3. Recommended Production Capstone Projects
+1. **End-to-End Predictive Analytics Engine**: Predict customer churn using XGBoost with SHAP explainability charts deployed on AWS/GCP.
+2. **Context-Aware Hybrid RAG Assistant**: Document retrieval system combining BM25 keyword matching and vector embeddings with re-ranking.
+
+#### 4. High-Yield Interview Topics
+- Bias-Variance tradeoff, precision vs. recall, ROC-AUC curve interpretation.
+- Overfitting mitigation (L1/L2 regularization, dropout, data augmentation).
+- Real-time data pipeline architecture and metric tracking.`;
+  }
+
+  // 2. Resume / ATS score improvement
+  if (query.includes('resume') || query.includes('ats') || query.includes('score')) {
+    return `### 📄 Resume & ATS Calibration Strategy
+
+Your primary resume currently holds a solid **ATS score of ${atsScore}/100**! Here is your high-impact action checklist to push that past **95+**:
+
+#### 1. Implement the Google X-Y-Z Action Formula
+Transform passive responsibility statements into quantifiable achievement metrics:
+- ❌ *Before*: "Built backend APIs and worked on database optimization."
+- ✅ *After*: "Architected high-throughput REST APIs handling **45,000+ daily requests**, reducing p95 database query latency by **32%** through PostgreSQL indexing and Redis caching."
+
+#### 2. Address Detected Skill Gaps
+Your resume diagnostic flagged missing keywords: **${missingSkills.slice(0, 4).join(', ')}**.
+- Feature these technologies directly within your **Technical Projects** and **Skills** summary sections.
+- Make sure core tools appear in both your skills list AND within practical project bullet points.
+
+#### 3. ATS Formatting Rules
+- Avoid multi-column table layouts or nested text boxes.
+- Stick to standard section headers: \`Work Experience\`, \`Technical Skills\`, \`Education\`, and \`Projects\`.
+- Export cleanly formatted PDF documents without embedded images for text.`;
+  }
+
+  // 3. Roadmap / Learning plan
+  if (query.includes('roadmap') || query.includes('30') || query.includes('60') || query.includes('90') || query.includes('plan')) {
+    return `### 🗺️ Tailored 30-60-90 Day Career Acceleration Plan
+
+Here is a structured learning and execution roadmap customized to bridge your current competencies into top-tier job offers:
+
+| Phase | Core Objective | Concrete Deliverables |
+| :--- | :--- | :--- |
+| **Days 1–30** | **Core Stack Mastery & Skill Gaps** | Master **${missingSkills.slice(0, 2).join(' & ')}**. Solve 40 LeetCode patterns (Arrays, Two Pointers, Trees, HashMaps). |
+| **Days 31–60** | **Production Capstone & System Design** | Build and deploy a multi-service full-stack web application featuring caching, authentication, and Docker. Study horizontal scaling, database sharding, and message queues. |
+| **Days 61–90** | **Mock Interview Blitz & Job Pipeline** | Complete 5+ AI video mock interviews on CareerPilot. Refine STAR behavioral stories. Target 25 tailored applications with personalized resumes. |
+
+💡 *Tip: You can track each milestone interactively under **Career Guidance → 30-60-90 Roadmap** in your student navigation!*`;
+  }
+
+  // 4. Interview Preparation
+  if (query.includes('interview') || query.includes('prep') || query.includes('mock') || query.includes('behavioral')) {
+    return `### 🎙️ Technical & Behavioral Interview Master Guide
+
+Here is how to ace upcoming technical rounds:
+
+#### 1. The STAR Behavioral Blueprint
+For questions like *"Tell me about a difficult bug you solved"* or *"Describe a time you dealt with conflicting deadlines"*:
+- **Situation**: Context in 1-2 sentences.
+- **Task**: The specific engineering challenge you owned.
+- **Action**: The technical decisions, trade-offs, and implementation steps **YOU** took.
+- **Result**: Quantifiable outcomes (e.g., *"shipped on time with zero regressions, saving 4 hours of weekly manual QA"*).
+
+#### 2. System Design Framework
+1. **Clarify Scope & Requirements**: User count, read vs. write ratio, latency SLA.
+2. **High-Level Design**: Client → Load Balancer → Web App → Cache (Redis) → Database (PostgreSQL/Mongo).
+3. **Deep Dive on Bottlenecks**: Indexing, connection pooling, rate limiting, and failure modes.
+
+#### 3. Practice Right Now
+Head over to the **Mock Interview** tab in CareerPilot to run live AI speech-to-text practice sessions with instant rubric evaluations!`;
+  }
+
+  // 5. Default General Guidance
+  return `### 💡 CareerPilot Career Assistant
+
+Hello **${studentName}**! I'm here to support your engineering journey.
+
+Based on your profile, here are strategic areas we can collaborate on right now:
+
+1. **Skill Gap Analysis**: Ask *"What should I learn to become a [Role Name]?"* and I will evaluate your skills against industry benchmarks.
+2. **Resume Polish**: Ask *"How can I improve my bullet points?"* or paste a bullet point to receive elevated, metric-driven phrasing.
+3. **ATS Diagnostics**: Ask *"How do I raise my ATS score?"* to review keyword matching and formatting suggestions.
+4. **Interview Readiness**: Ask *"Give me 3 technical interview questions on ${currentSkills[0] || 'software engineering'}"* to test your knowledge.
+5. **Project Blueprints**: Ask for portfolio project ideas that stand out to hiring managers.
+
+What goal would you like to tackle first today?`;
+}
+
+/**
+ * Generate quick follow-up prompt suggestions
+ */
+function generateQuickSuggestions(userMessage: string, role?: string): string[] {
+  const query = userMessage.toLowerCase();
+
+  if (role === 'recruiter') {
+    return [
+      'Draft interview questions for Senior React Engineer',
+      'What are key screening red flags in junior resumes?',
+      'How do I assess system design capabilities?',
+    ];
+  }
+
+  if (query.includes('data scien') || query.includes('ai')) {
+    return [
+      'Suggest a Data Science portfolio project',
+      'What are common ML engineering interview questions?',
+      'How do I add PyTorch to my current resume?',
+    ];
+  }
+
+  if (query.includes('resume') || query.includes('ats')) {
+    return [
+      'Show me an example of the Google X-Y-Z formula',
+      'How do I list Docker & Redis in my projects?',
+      'What keywords should I add for Full-Stack roles?',
+    ];
+  }
+
+  if (query.includes('interview')) {
+    return [
+      'Give me a tricky system design interview question',
+      'How do I explain trade-offs between SQL and NoSQL?',
+      'Practice a behavioral STAR answer with me',
+    ];
+  }
+
+  return [
+    'What should I learn to become a Data Scientist?',
+    'How can I boost my resume ATS score past 95%?',
+    'Give me a 30-day technical interview prep plan',
+  ];
+}

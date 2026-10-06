@@ -16,6 +16,7 @@ import recruiterRoutes from './server/routes/recruiterRoutes.js';
 import jobRoutes from './server/routes/jobRoutes.js';
 import notificationRoutes from './server/routes/notificationRoutes.js';
 import adminRoutes from './server/routes/adminRoutes.js';
+import chatRoutes from './server/routes/chatRoutes.js';
 
 dotenv.config();
 
@@ -42,6 +43,7 @@ async function startServer() {
   app.use('/api/jobs', jobRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/chat', chatRoutes);
 
   // Health check endpoint
   app.get('/api/health', (req, res) => {

@@ -34,15 +34,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(res.user);
         })
         .catch(() => {
-          // If token expired or invalid, default to Demo Student in local dev
-          switchDemoRole('student');
+          // Token is invalid or expired: clear and keep unauthenticated
+          api.clearToken();
+          setUser(null);
         })
         .finally(() => {
           setLoading(false);
         });
     } else {
-      // Default to demo student for immediate evaluation
-      switchDemoRole('student').finally(() => setLoading(false));
+      // Clean visitor: remains unauthenticated
+      setUser(null);
+      setLoading(false);
     }
   }, []);
 

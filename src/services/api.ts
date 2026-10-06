@@ -3,6 +3,8 @@ import {
   StudentProfile,
   RecruiterProfile,
   Resume,
+  ResumeVersion,
+  ResumeComparisonResult,
   Job,
   Application,
   InterviewSession,
@@ -211,6 +213,34 @@ export const api = {
     });
   },
 
+  getResumeVersions(id: string) {
+    return this.request<{
+      versions: ResumeVersion[];
+      currentVersion: number;
+      resumeId: string;
+      filename: string;
+    }>(`/api/resumes/${id}/versions`);
+  },
+
+  createResumeVersion(id: string, label: string, changesSummary: string) {
+    return this.request<{ message: string; version: ResumeVersion }>(`/api/resumes/${id}/versions`, {
+      method: 'POST',
+      body: JSON.stringify({ label, changesSummary }),
+    });
+  },
+
+  revertResumeVersion(id: string, versionId: string) {
+    return this.request<{ message: string; resume: Resume }>(`/api/resumes/${id}/revert/${versionId}`, {
+      method: 'POST',
+    });
+  },
+
+  compareResumeVersions(id: string, v1: string, v2: string) {
+    return this.request<{ comparison: ResumeComparisonResult }>(
+      `/api/resumes/${id}/compare?v1=${encodeURIComponent(v1)}&v2=${encodeURIComponent(v2)}`
+    );
+  },
+
   // --- ATS Simulator ---
   analyzeAts(data: { resumeId?: string; resumeText?: string; jobDescription?: string }) {
     return this.request<{ result: any }>('/api/ats/analyze', {
@@ -378,6 +408,19 @@ export const api = {
     });
   },
 
+  updateJob(jobId: string, updates: any) {
+    return this.request<{ message: string; job: Job }>(`/api/jobs/${jobId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  deleteJob(jobId: string) {
+    return this.request<{ message: string; success: boolean }>(`/api/jobs/${jobId}`, {
+      method: 'DELETE',
+    });
+  },
+
   generateJobDescription(params: any) {
     return this.request<{ result: any }>('/api/recruiter/generate-job-desc', {
       method: 'POST',
@@ -453,5 +496,28 @@ export const api = {
 
   getAdminAuditLogs() {
     return this.request<{ logs: any[] }>('/api/admin/audit-logs');
+  },
+
+  // --- AI Career Assistant Chatbot ---
+  sendChatMessage(message: string, history: Array<{ role: 'user' | 'model'; content: string }>) {
+    return this.request<{
+      reply: string;
+      suggestions: string[];
+      source: 'gemini' | 'fallback';
+      userContextAttached: boolean;
+    }>('/api/chat/message', {
+      method: 'POST',
+      body: JSON.stringify({ message, history }),
+    });
+  },
+
+  getChatInitial() {
+    return this.request<{
+      greeting: string;
+      suggestions: string[];
+      personalized: boolean;
+      studentName?: string;
+      atsScore?: number;
+    }>('/api/chat/initial');
   },
 };

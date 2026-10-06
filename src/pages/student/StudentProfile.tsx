@@ -59,7 +59,7 @@ export const StudentProfilePage: React.FC = () => {
           />
 
           <div className="space-y-1 max-w-xl">
-            <h1 className="text-2xl font-extrabold text-slate-900">{user?.displayName || 'Alex Johnson'}</h1>
+            <h1 className="text-2xl font-extrabold text-slate-900">{user?.displayName || 'Candidate'}</h1>
             <p className="text-sm font-semibold text-indigo-600">{profile?.headline}</p>
 
             <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-2">

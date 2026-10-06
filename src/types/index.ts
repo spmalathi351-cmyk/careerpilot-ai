@@ -101,6 +101,67 @@ export interface ExtractedResumeData {
   actionVerbSuggestions: string[];
 }
 
+export interface ResumeVersion {
+  id: string;
+  versionNumber: number;
+  label: string;
+  createdAt: string;
+  createdBy: string;
+  changesSummary: string;
+  atsScore: number;
+  extractedData: ExtractedResumeData;
+  scores: {
+    overall: number;
+    keywordMatch: number;
+    skillsMatch: number;
+    formattingScore: number;
+    experienceRelevance: number;
+    educationRelevance: number;
+  };
+}
+
+export interface ResumeComparisonResult {
+  versionA: ResumeVersion;
+  versionB: ResumeVersion;
+  scoreDelta: {
+    overall: number;
+    keywordMatch: number;
+    skillsMatch: number;
+    formattingScore: number;
+    experienceRelevance: number;
+    educationRelevance: number;
+  };
+  skillsDiff: {
+    added: string[];
+    removed: string[];
+    retained: string[];
+  };
+  experienceDiff: {
+    totalRolesA: number;
+    totalRolesB: number;
+    bulletsModifiedCount: number;
+    roleComparisons: {
+      roleTitle: string;
+      company: string;
+      bulletsA: string[];
+      bulletsB: string[];
+      addedBullets: string[];
+      removedBullets: string[];
+    }[];
+  };
+  projectsDiff: {
+    addedProjects: string[];
+    removedProjects: string[];
+    retainedProjects: string[];
+    techStackAdditions: string[];
+  };
+  formattingDiff: {
+    resolvedIssues: string[];
+    newIssues: string[];
+    commonIssues: string[];
+  };
+}
+
 export interface Resume {
   id: string;
   studentId: string;
@@ -110,6 +171,8 @@ export interface Resume {
   isPrimary: boolean;
   atsScore: number;
   processingStatus: 'uploaded' | 'validating' | 'processing' | 'completed' | 'failed';
+  currentVersion?: number;
+  versions?: ResumeVersion[];
   extractedData: ExtractedResumeData;
   scores: {
     overall: number;

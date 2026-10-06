@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { BrandLogo } from '../common/BrandLogo';
 import {
   LayoutDashboard,
   User,
@@ -62,6 +63,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const content = (
     <div className="h-full flex flex-col justify-between py-6 px-4 bg-slate-900 text-slate-300">
       <div>
+        {/* Brand Logo at the top of the sidebar */}
+        <div className="px-2 mb-5 pb-4 border-b border-slate-800/80">
+          <BrandLogo variant="sidebar" />
+        </div>
+
         <div className="px-3 mb-6">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
             {role === 'recruiter' ? 'Recruiter Portal' : role === 'admin' ? 'Admin Portal' : 'Student Portal'}

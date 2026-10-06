@@ -1,14 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database.js';
-import { getAuthenticatedUserId } from './authRoutes.js';
+import { requireAuth, requireRole } from './authRoutes.js';
 import { generateCareerGuidance, generateCareerRoadmap } from '../ai/geminiService.js';
 
 const router = Router();
 
+// Apply auth and role protection
+router.use(requireAuth);
+router.use(requireRole(['student', 'admin']));
+
 // Career Guidance Recommendations
 router.get('/guidance', async (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const user = (req as any).user;
+    const userId = user.id;
     const profile = db.getStudentProfileByUserId(userId);
     const resumes = db.getResumesByStudentId(userId);
     const primaryResume = resumes.find((r) => r.isPrimary) || resumes[0];
@@ -47,7 +52,8 @@ router.get('/guidance', async (req: Request, res: Response) => {
 // Career Roadmap
 router.get('/roadmap', async (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const user = (req as any).user;
+    const userId = user.id;
     let roadmap = db.getRoadmapByStudentId(userId);
 
     if (!roadmap) {
@@ -76,7 +82,8 @@ router.get('/roadmap', async (req: Request, res: Response) => {
 
 // Toggle milestone complete
 router.patch('/roadmap/:id', (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
+  const user = (req as any).user;
+  const userId = user.id;
   const updatedRoadmap = db.toggleRoadmapMilestone(userId, req.params.id);
   if (!updatedRoadmap) {
     return res.status(404).json({ error: 'Milestone or roadmap not found' });
@@ -87,7 +94,8 @@ router.patch('/roadmap/:id', (req: Request, res: Response) => {
 // Regenerate Custom Roadmap
 router.post('/generate-custom-roadmap', async (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const user = (req as any).user;
+    const userId = user.id;
     const { targetRole } = req.body;
     const profile = db.getStudentProfileByUserId(userId);
     const skills = profile?.skills || ['TypeScript', 'React'];

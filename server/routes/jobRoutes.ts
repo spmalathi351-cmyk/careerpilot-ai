@@ -23,6 +23,9 @@ router.get('/:id', (req: Request, res: Response) => {
 router.post('/', (req: Request, res: Response) => {
   try {
     const userId = getAuthenticatedUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: Authentication required to create a job' });
+    }
     const profile = db.getRecruiterProfileByUserId(userId);
     const {
       title,
@@ -85,6 +88,77 @@ router.post('/:id/publish', (req: Request, res: Response) => {
     return res.status(404).json({ error: 'Job not found' });
   }
   return res.json({ message: 'Job published', job: updated });
+});
+
+// PUT /api/jobs/:id -> Edit Job
+router.put('/:id', (req: Request, res: Response) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: Authentication required to edit job' });
+    }
+    const user = db.getUserById(userId);
+    if (!user || (user.role !== 'recruiter' && user.role !== 'admin')) {
+      return res.status(403).json({ error: 'Forbidden: Recruiter access required to edit job' });
+    }
+    const existingJob = db.getJobById(req.params.id);
+    if (!existingJob) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    const updated = db.updateJob(req.params.id, req.body);
+    if (!updated) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    db.logAudit({
+      userId,
+      userName: user.displayName || 'Recruiter',
+      role: 'recruiter',
+      action: 'JOB_UPDATED',
+      ipAddress: '127.0.0.1',
+      timestamp: new Date().toISOString(),
+      metadata: { jobId: req.params.id, title: updated.title },
+    });
+
+    return res.json({ message: 'Job updated successfully', job: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Job update failed' });
+  }
+});
+
+// DELETE /api/jobs/:id -> Delete Job
+router.delete('/:id', (req: Request, res: Response) => {
+  try {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: Authentication required to delete job' });
+    }
+    const user = db.getUserById(userId);
+    if (!user || (user.role !== 'recruiter' && user.role !== 'admin')) {
+      return res.status(403).json({ error: 'Forbidden: Recruiter access required to delete job' });
+    }
+    const existingJob = db.getJobById(req.params.id);
+    if (!existingJob) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    const success = db.deleteJob(req.params.id);
+
+    db.logAudit({
+      userId,
+      userName: user.displayName || 'Recruiter',
+      role: 'recruiter',
+      action: 'JOB_DELETED',
+      ipAddress: '127.0.0.1',
+      timestamp: new Date().toISOString(),
+      metadata: { jobId: req.params.id, title: existingJob.title },
+    });
+
+    return res.json({ message: 'Job deleted successfully', success });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Job deletion failed' });
+  }
 });
 
 export default router;

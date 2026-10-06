@@ -1,14 +1,18 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database.js';
-import { getAuthenticatedUserId } from './authRoutes.js';
+import { requireAuth, requireRole } from './authRoutes.js';
 import { polishTextWithAI, generateCareerGuidance } from '../ai/geminiService.js';
 
 const router = Router();
 
+// Apply auth and role protection to all student routes
+router.use(requireAuth);
+router.use(requireRole(['student', 'admin']));
+
 // Student Profile
 router.get('/profile', (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
-  const user = db.getUserById(userId);
+  const user = (req as any).user;
+  const userId = user.id;
   let profile = db.getStudentProfileByUserId(userId);
 
   if (!profile) {
@@ -36,22 +40,23 @@ router.get('/profile', (req: Request, res: Response) => {
 
 // Update Profile
 router.put('/profile', (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
+  const user = (req as any).user;
+  const userId = user.id;
   const updates = req.body;
 
   const profile = db.createOrUpdateStudentProfile(userId, updates);
 
   // If user display name is updated
   if (updates.displayName) {
-    const user = db.getUserById(userId);
-    if (user) {
-      user.displayName = updates.displayName;
+    const existingUser = db.getUserById(userId);
+    if (existingUser) {
+      existingUser.displayName = updates.displayName;
     }
   }
 
   db.logAudit({
     userId,
-    userName: updates.displayName || 'Student',
+    userName: updates.displayName || user.displayName || 'Student',
     role: 'student',
     action: 'PROFILE_UPDATED',
     ipAddress: '127.0.0.1',
@@ -63,8 +68,8 @@ router.put('/profile', (req: Request, res: Response) => {
 
 // Student Dashboard Data
 router.get('/dashboard', async (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
-  const user = db.getUserById(userId);
+  const user = (req as any).user;
+  const userId = user.id;
   let profile = db.getStudentProfileByUserId(userId);
 
   if (!profile) {
@@ -111,7 +116,8 @@ router.get('/dashboard', async (req: Request, res: Response) => {
 
 // Polish Bio with Gemini
 router.post('/improve-bio', async (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
+  const user = (req as any).user;
+  const userId = user.id;
   const { bio } = req.body;
 
   const improved = await polishTextWithAI(bio || '', 'student_bio');
@@ -130,7 +136,8 @@ router.post('/improve-bio', async (req: Request, res: Response) => {
 
 // Job Recommendation Engine: Match parsed resume against active job postings
 router.get('/job-recommendations', (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
+  const user = (req as any).user;
+  const userId = user.id;
   const profile = db.getStudentProfileByUserId(userId);
   const resumes = db.getResumesByStudentId(userId);
 

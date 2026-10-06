@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { BrandLogo } from '../../components/common/BrandLogo';
 import { Briefcase, ArrowRight, Lock, Mail, User, Building, AlertCircle } from 'lucide-react';
 
 export const RecruiterRegisterPage: React.FC = () => {
@@ -51,11 +52,13 @@ export const RecruiterRegisterPage: React.FC = () => {
 
   return (
     <div className="max-w-xl mx-auto my-8">
+      {/* Official Brand Logo centered above recruiter registration form */}
+      <div className="flex justify-center mb-6">
+        <BrandLogo variant="full" />
+      </div>
+
       <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
         <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto mb-3">
-            <Briefcase className="w-6 h-6" />
-          </div>
           <h1 className="text-2xl font-bold text-slate-900">Register Recruiter / Company</h1>
           <p className="text-xs text-slate-500 mt-1">Hire verified talent with automated ATS matching and candidate dossiers</p>
         </div>

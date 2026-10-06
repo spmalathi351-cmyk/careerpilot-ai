@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { api } from '../../services/api';
 import { Resume } from '../../types';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   Printer,
   Sparkles,
@@ -44,6 +45,7 @@ export const ResumePreviewPage: React.FC = () => {
   const [polishing, setPolishing] = useState(false);
 
   const { showToast } = useNotifications();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (id) {
@@ -513,7 +515,7 @@ export const ResumePreviewPage: React.FC = () => {
             <div className={`border-b-2 pb-5 space-y-1.5 ${colorStyles.borderClass}`}>
               <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
                 <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 uppercase">
-                  {d?.name || 'Alex Johnson'}
+                  {d?.name || user?.displayName || 'Candidate'}
                 </h1>
                 <p className={`text-xs sm:text-sm font-bold tracking-wide ${colorStyles.primaryClass}`}>
                   {d?.headline || 'Full-Stack Software Engineer & Applied AI Enthusiast'}
@@ -670,7 +672,7 @@ export const ResumePreviewPage: React.FC = () => {
             {/* Header: Centered, Traditional, Regal */}
             <div className="text-center space-y-1 pb-3 border-b-2 border-slate-900">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-normal uppercase text-slate-900">
-                {d?.name || 'Alex Johnson'}
+                {d?.name || user?.displayName || 'Candidate'}
               </h1>
               <p className="text-xs italic text-slate-700">
                 {d?.headline || 'Full-Stack Software Engineer & Applied AI Enthusiast'}
@@ -799,12 +801,12 @@ export const ResumePreviewPage: React.FC = () => {
             {/* Header with compact pill border */}
             <div className={`p-4 rounded-2xl ${colorStyles.softBg} border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-2`}>
               <div>
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900">{d?.name || 'Alex Johnson'}</h1>
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900">{d?.name || user?.displayName || 'Candidate'}</h1>
                 <p className={`text-xs font-bold ${colorStyles.primaryClass}`}>{d?.headline}</p>
               </div>
               <div className="text-right text-[11px] font-mono text-slate-600 space-y-0.5">
                 <p>{d?.email} · {d?.phone}</p>
-                <p>San Francisco, CA · github.com/alexjohnson</p>
+                <p>San Francisco, CA</p>
               </div>
             </div>
 

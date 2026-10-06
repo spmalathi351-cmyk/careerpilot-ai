@@ -1,15 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database.js';
-import { getAuthenticatedUserId } from './authRoutes.js';
+import { requireAuth } from './authRoutes.js';
 import { generateInterviewQuestions, evaluateInterviewAnswer } from '../ai/geminiService.js';
 import { InterviewTurn } from '../types.js';
 
 const router = Router();
 
+// Apply authentication to all interview endpoints
+router.use(requireAuth);
+
 // Interview Prep Overview & Question Banks
 router.get('/prep', async (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const user = (req as any).user;
+    const userId = user.id;
     const profile = db.getStudentProfileByUserId(userId);
     const targetRole = profile?.targetRoles[0] || 'Full-Stack Software Engineer';
 
@@ -39,7 +43,8 @@ router.get('/prep', async (req: Request, res: Response) => {
 // Start Mock Session
 router.post('/mock/start', async (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const user = (req as any).user;
+    const userId = user.id;
     const { roleTitle, type, applicationId } = req.body;
 
     const targetRole = roleTitle || 'Full-Stack Software Engineer';
@@ -56,7 +61,7 @@ router.post('/mock/start', async (req: Request, res: Response) => {
 
     db.logAudit({
       userId,
-      userName: db.getUserById(userId)?.displayName || 'Candidate',
+      userName: user.displayName || 'Candidate',
       role: 'student',
       action: 'MOCK_INTERVIEW_STARTED',
       ipAddress: '127.0.0.1',
@@ -78,7 +83,15 @@ router.post('/mock/start', async (req: Request, res: Response) => {
 // Submit Answer for a Turn
 router.post('/mock/:id/answer', async (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const user = (req as any).user;
+    const session = db.getInterviewSessionById(req.params.id);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    if (session.studentId !== user.id) {
+      return res.status(403).json({ error: "Forbidden: Access denied to another student's interview session" });
+    }
+
     const { questionNumber, question, category, studentAnswer, role } = req.body;
 
     if (!question || !studentAnswer) {
@@ -101,7 +114,7 @@ router.post('/mock/:id/answer', async (req: Request, res: Response) => {
     const updatedSession = db.addInterviewTurn(req.params.id, turn);
 
     db.logAiUsage({
-      userId,
+      userId: user.id,
       feature: 'Mock Interview Turn Evaluation',
       model: 'gemini-3.8-flash',
       inputTokens: 520,
@@ -120,11 +133,16 @@ router.post('/mock/:id/answer', async (req: Request, res: Response) => {
 
 // Complete Session
 router.post('/mock/:id/complete', (req: Request, res: Response) => {
-  const session = db.completeInterviewSession(req.params.id);
-  if (!session) {
+  const user = (req as any).user;
+  const existingSession = db.getInterviewSessionById(req.params.id);
+  if (!existingSession) {
     return res.status(404).json({ error: 'Session not found' });
   }
+  if (existingSession.studentId !== user.id) {
+    return res.status(403).json({ error: "Forbidden: Access denied to another student's interview session" });
+  }
 
+  const session = db.completeInterviewSession(req.params.id);
   return res.json({
     message: 'Interview session completed and evaluated',
     session,
@@ -133,9 +151,13 @@ router.post('/mock/:id/complete', (req: Request, res: Response) => {
 
 // Single Session Detail
 router.get('/mock/:id', (req: Request, res: Response) => {
+  const user = (req as any).user;
   const session = db.getInterviewSessionById(req.params.id);
   if (!session) {
     return res.status(404).json({ error: 'Session not found' });
+  }
+  if (user.role !== 'recruiter' && user.role !== 'admin' && session.studentId !== user.id) {
+    return res.status(403).json({ error: "Forbidden: Access denied to another student's interview session" });
   }
   return res.json({ session });
 });
@@ -143,7 +165,7 @@ router.get('/mock/:id', (req: Request, res: Response) => {
 // Video Interview Answer Submission (Camera/Mic or Text Fallback)
 router.post('/video/submit', async (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const user = (req as any).user;
     const { sessionId, question, answerText, videoBlobPresent, recordingDurationSeconds } = req.body;
 
     const evaluation = await evaluateInterviewAnswer(
@@ -153,7 +175,7 @@ router.post('/video/submit', async (req: Request, res: Response) => {
     );
 
     db.logAiUsage({
-      userId,
+      userId: user.id,
       feature: 'Video Interview Analysis',
       model: 'gemini-3.8-flash',
       inputTokens: 600,

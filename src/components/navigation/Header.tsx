@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { BrandLogo } from '../common/BrandLogo';
 import {
   Compass,
   Bell,
@@ -46,16 +47,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             </button>
           )}
 
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
-              <Compass className="w-5 h-5" />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-lg leading-tight tracking-tight text-slate-900 flex items-center gap-1.5">
-                CareerPilot <span className="text-indigo-600 font-extrabold text-sm uppercase px-1.5 py-0.2 bg-indigo-50 rounded border border-indigo-100">AI</span>
-              </span>
-            </div>
-          </Link>
+          <BrandLogo variant="horizontal" size="md" />
         </div>
 
         {/* Center: Contextual Quick Links */}

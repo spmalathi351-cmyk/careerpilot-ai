@@ -1,31 +1,54 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database.js';
-import { getAuthenticatedUserId } from './authRoutes.js';
+import { requireAuth } from './authRoutes.js';
 import { parseResumeWithAI, polishTextWithAI } from '../ai/geminiService.js';
 import { Resume } from '../types.js';
 
 const router = Router();
 
-// List Resumes
+// Apply requireAuth to all resume operations
+router.use(requireAuth);
+
+function checkResumeOwnership(
+  req: Request,
+  res: Response,
+  resume: Resume | undefined,
+  allowRecruiterRead = false
+): resume is Resume {
+  if (!resume) {
+    res.status(404).json({ error: 'Resume not found' });
+    return false;
+  }
+  const user = (req as any).user;
+  if (allowRecruiterRead && (user.role === 'recruiter' || user.role === 'admin')) {
+    return true;
+  }
+  if (resume.studentId !== user.id) {
+    res.status(403).json({ error: "Forbidden: Access denied to another student's resume" });
+    return false;
+  }
+  return true;
+}
+
+// List Resumes (scoped to authenticated student)
 router.get('/', (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
-  const list = db.getResumesByStudentId(userId);
+  const user = (req as any).user;
+  const list = db.getResumesByStudentId(user.id);
   return res.json({ resumes: list });
 });
 
 // Single Resume Detail
 router.get('/:id', (req: Request, res: Response) => {
   const resume = db.getResumeById(req.params.id);
-  if (!resume) {
-    return res.status(404).json({ error: 'Resume not found' });
-  }
+  if (!checkResumeOwnership(req, res, resume, true)) return;
   return res.json({ resume });
 });
 
 // Upload Resume
 router.post('/upload', async (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const user = (req as any).user;
+    const userId = user.id;
     const { filename, fileSize, fileContent, rawText } = req.body;
 
     if (!filename) {
@@ -38,7 +61,7 @@ router.post('/upload', async (req: Request, res: Response) => {
     const resumeId = `res-${Date.now()}`;
     const sampleText =
       rawText ||
-      `Alex Johnson | alex.johnson@example.com | (555) 234-5678
+      `${user.displayName || 'Candidate'} | ${user.email} | (555) 234-5678
 Full-Stack Software Engineer & Applied AI Enthusiast
 Education: California Institute of Technology - B.S. in Computer Science (GPA 3.89)
 Skills: TypeScript, React, Node.js, Python, PostgreSQL, Docker, Tailwind CSS, REST APIs, Git, Machine Learning.
@@ -138,9 +161,7 @@ CareerPilot Real-time Engine (TypeScript, Express, React, Tailwind, Gemini API)
 // Diagnostic route
 router.get('/:id/diagnostic', (req: Request, res: Response) => {
   const resume = db.getResumeById(req.params.id);
-  if (!resume) {
-    return res.status(404).json({ error: 'Resume not found' });
-  }
+  if (!checkResumeOwnership(req, res, resume, true)) return;
   return res.json({
     resume,
     diagnostic: {
@@ -157,30 +178,112 @@ router.get('/:id/diagnostic', (req: Request, res: Response) => {
 
 // Set Primary
 router.patch('/:id/primary', (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
-  const success = db.setPrimaryResume(userId, req.params.id);
+  const user = (req as any).user;
+  const resume = db.getResumeById(req.params.id);
+  if (!checkResumeOwnership(req, res, resume, false)) return;
+  const success = db.setPrimaryResume(user.id, req.params.id);
   return res.json({ success, primaryId: req.params.id });
 });
 
 // Update Extracted Info
 router.put('/:id/extracted', (req: Request, res: Response) => {
+  const resume = db.getResumeById(req.params.id);
+  if (!checkResumeOwnership(req, res, resume, false)) return;
   const { extractedData } = req.body;
-  const resume = db.updateResume(req.params.id, { extractedData });
-  if (!resume) {
-    return res.status(404).json({ error: 'Resume not found' });
-  }
-  return res.json({ message: 'Extracted resume data updated', resume });
+  const updatedResume = db.updateResume(req.params.id, { extractedData });
+  return res.json({ message: 'Extracted resume data updated', resume: updatedResume });
 });
 
 // Delete Resume
 router.delete('/:id', (req: Request, res: Response) => {
+  const resume = db.getResumeById(req.params.id);
+  if (!checkResumeOwnership(req, res, resume, false)) return;
   const deleted = db.deleteResume(req.params.id);
   return res.json({ success: deleted });
 });
 
+// Version History: Get all versions for a resume
+router.get('/:id/versions', (req: Request, res: Response) => {
+  const resume = db.getResumeById(req.params.id);
+  if (!checkResumeOwnership(req, res, resume, false)) return;
+  const versions = db.getResumeVersions(req.params.id);
+  return res.json({
+    versions,
+    currentVersion: resume.currentVersion || 1,
+    resumeId: resume.id,
+    filename: resume.filename,
+  });
+});
+
+// Version History: Create a new manual checkpoint version
+router.post('/:id/versions', (req: Request, res: Response) => {
+  const user = (req as any).user;
+  const resume = db.getResumeById(req.params.id);
+  if (!checkResumeOwnership(req, res, resume, false)) return;
+  const { label, changesSummary } = req.body;
+  const newVer = db.addResumeVersion(
+    req.params.id,
+    label,
+    changesSummary,
+    user.displayName || 'Student'
+  );
+  if (!newVer) {
+    return res.status(404).json({ error: 'Resume not found' });
+  }
+  return res.status(201).json({
+    message: 'New version checkpoint created successfully',
+    version: newVer,
+  });
+});
+
+// Version History: Revert to previous parsed version
+router.post('/:id/revert/:versionId', (req: Request, res: Response) => {
+  const user = (req as any).user;
+  const resume = db.getResumeById(req.params.id);
+  if (!checkResumeOwnership(req, res, resume, false)) return;
+
+  const revertedResume = db.revertResumeVersion(req.params.id, req.params.versionId);
+  if (!revertedResume) {
+    return res.status(404).json({ error: 'Resume or version not found' });
+  }
+
+  db.addNotification({
+    userId: user.id,
+    type: 'resume_analysis',
+    title: 'Resume Reverted to Previous Version',
+    message: `Resume "${revertedResume.filename}" successfully restored to version ${revertedResume.currentVersion}.`,
+    priority: 'medium',
+    link: `/student/resumes/${revertedResume.id}/diagnostic`,
+  });
+
+  return res.json({
+    message: `Successfully reverted to version ${revertedResume.currentVersion}`,
+    resume: revertedResume,
+  });
+});
+
+// Version History: Compare two versions side-by-side
+router.get('/:id/compare', (req: Request, res: Response) => {
+  const resume = db.getResumeById(req.params.id);
+  if (!checkResumeOwnership(req, res, resume, false)) return;
+
+  const { v1, v2 } = req.query;
+  if (!v1 || !v2) {
+    return res.status(400).json({ error: 'Both v1 and v2 version IDs are required for comparison' });
+  }
+
+  const comparison = db.compareResumeVersions(req.params.id, String(v1), String(v2));
+  if (!comparison) {
+    return res.status(404).json({ error: 'Resume or specified versions not found' });
+  }
+
+  return res.json({ comparison });
+});
+
 // Bullet Point Improver
 router.post('/improve-bullet', async (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
+  const user = (req as any).user;
+  const userId = user.id;
   const { text } = req.body;
   const improved = await polishTextWithAI(text, 'bullet_point');
 

@@ -4,6 +4,8 @@ import {
   RecruiterProfile,
   Company,
   Resume,
+  ResumeVersion,
+  ResumeComparisonResult,
   Job,
   Application,
   InterviewSession,
@@ -408,8 +410,141 @@ class InMemoryDatabase {
         ],
       },
       createdAt: '2026-09-15T10:30:00Z',
-      updatedAt: '2026-09-15T10:30:00Z',
+      updatedAt: '2026-10-01T16:45:00Z',
     };
+
+    const v1: ResumeVersion = {
+      id: 'ver-res-1',
+      versionNumber: 1,
+      label: 'v1 - Initial Raw Ingestion',
+      createdAt: '2026-09-15T10:30:00Z',
+      createdBy: 'Alex Johnson (PDF Upload)',
+      changesSummary: 'Initial document parse from PDF upload. Raw bullets and baseline skills.',
+      atsScore: 81,
+      scores: {
+        overall: 81,
+        keywordMatch: 79,
+        skillsMatch: 82,
+        formattingScore: 88,
+        experienceRelevance: 78,
+        educationRelevance: 88,
+      },
+      extractedData: {
+        ...resume1.extractedData,
+        skills: ['TypeScript', 'React', 'Node.js', 'Python', 'PostgreSQL', 'Git'],
+        experience: [
+          {
+            id: 'exp-1',
+            company: 'Nexus Software Labs',
+            role: 'Software Engineering Intern',
+            location: 'San Francisco, CA',
+            startDate: 'Jun 2025',
+            endDate: 'Sep 2025',
+            current: false,
+            description: 'Worked on web features and backend API maintenance.',
+            bulletPoints: [
+              'Assisted team with writing API endpoints and fixing bug tickets.',
+              'Maintained PostgreSQL database tables and updated queries.',
+              'Participated in daily standups and bi-weekly sprint planning.',
+            ],
+          },
+        ],
+        projects: [
+          {
+            id: 'proj-1',
+            title: 'CareerPilot Real-time Engine',
+            description: 'Mock interview prep application with reactive feedback.',
+            technologies: ['TypeScript', 'React'],
+            impact: 'Enabled practice interviews for students.',
+          },
+        ],
+        formattingIssues: [
+          'Table headers caused 2 column alignment ambiguities in legacy ATS parser.',
+          'Missing explicit bullet formatting on project summary lines.',
+        ],
+      },
+    };
+
+    const v2: ResumeVersion = {
+      id: 'ver-res-2',
+      versionNumber: 2,
+      label: 'v2 - Action Verbs & DevOps Additions',
+      createdAt: '2026-09-24T14:15:00Z',
+      createdBy: 'Alex Johnson (Gemini AI Polish)',
+      changesSummary: 'Added Docker, REST APIs, Tailwind CSS; Rewrote bullet points with quantifiable latency metrics; Fixed table layout.',
+      atsScore: 87,
+      scores: {
+        overall: 87,
+        keywordMatch: 89,
+        skillsMatch: 88,
+        formattingScore: 92,
+        experienceRelevance: 85,
+        educationRelevance: 90,
+      },
+      extractedData: {
+        ...resume1.extractedData,
+        skills: [
+          'TypeScript',
+          'React',
+          'Node.js',
+          'Python',
+          'PostgreSQL',
+          'Docker',
+          'Git',
+          'Tailwind CSS',
+          'REST APIs',
+        ],
+        experience: [
+          {
+            id: 'exp-1',
+            company: 'Nexus Software Labs',
+            role: 'Software Engineering Intern',
+            location: 'San Francisco, CA',
+            startDate: 'Jun 2025',
+            endDate: 'Sep 2025',
+            current: false,
+            description: 'Engineered high-throughput REST APIs and database query optimization.',
+            bulletPoints: [
+              'Developed high-throughput REST API endpoints servicing 20,000 daily requests with Express.',
+              'Optimized PostgreSQL queries decreasing 95th-percentile response latency by 20%.',
+              'Contributed to reusable UI component library using React and Tailwind CSS.',
+            ],
+          },
+        ],
+        projects: [
+          {
+            id: 'proj-1',
+            title: 'CareerPilot Real-time Engine',
+            description: 'Simulated technical screening platform with reactive WebSocket telemetry.',
+            technologies: ['TypeScript', 'Express', 'React', 'Tailwind CSS'],
+            impact: 'Cut mock interview evaluation latency to under 350ms with instant feedback.',
+          },
+        ],
+        formattingIssues: ['Resolved table layout issues; Single minor font consistency suggestion remaining.'],
+      },
+    };
+
+    const v3: ResumeVersion = {
+      id: 'ver-res-3',
+      versionNumber: 3,
+      label: 'v3 - Applied AI & Systems Architecture Refinement',
+      createdAt: '2026-10-01T16:45:00Z',
+      createdBy: 'Alex Johnson (Current Active)',
+      changesSummary: 'Added Gemini API & System Design; Scaled request impact to 45k/day; Integrated CloudVision telemetry capstone; Zero ATS formatting warnings.',
+      atsScore: 91,
+      scores: {
+        overall: 91,
+        keywordMatch: 93,
+        skillsMatch: 92,
+        formattingScore: 95,
+        experienceRelevance: 89,
+        educationRelevance: 90,
+      },
+      extractedData: resume1.extractedData,
+    };
+
+    resume1.currentVersion = 3;
+    resume1.versions = [v3, v2, v1];
     this.resumes.set(resume1.id, resume1);
 
     // 7. Jobs
@@ -1044,6 +1179,178 @@ class InMemoryDatabase {
     return this.resumes.delete(id);
   }
 
+  // --- Resume Version History & Comparison ---
+  getResumeVersions(resumeId: string): ResumeVersion[] {
+    const resume = this.resumes.get(resumeId);
+    if (!resume) return [];
+    if (!resume.versions || resume.versions.length === 0) {
+      const initialVer: ResumeVersion = {
+        id: `ver-${resumeId}-1`,
+        versionNumber: 1,
+        label: 'v1 - Initial Extraction',
+        createdAt: resume.createdAt,
+        createdBy: resume.extractedData?.name || 'Candidate',
+        changesSummary: 'Initial document parsed baseline.',
+        atsScore: resume.atsScore,
+        scores: resume.scores,
+        extractedData: resume.extractedData,
+      };
+      resume.versions = [initialVer];
+      resume.currentVersion = 1;
+      this.resumes.set(resumeId, resume);
+    }
+    return resume.versions;
+  }
+
+  addResumeVersion(
+    resumeId: string,
+    label: string,
+    changesSummary: string,
+    author?: string
+  ): ResumeVersion | undefined {
+    const resume = this.resumes.get(resumeId);
+    if (!resume) return undefined;
+    const versions = this.getResumeVersions(resumeId);
+    const nextVerNum = (resume.currentVersion || versions.length) + 1;
+    const newVer: ResumeVersion = {
+      id: `ver-${resumeId}-${Date.now()}`,
+      versionNumber: nextVerNum,
+      label: label || `v${nextVerNum} - Checkpoint`,
+      createdAt: new Date().toISOString(),
+      createdBy: author || resume.extractedData?.name || 'Student',
+      changesSummary: changesSummary || 'Incremental edits and ATS optimization.',
+      atsScore: resume.atsScore,
+      scores: resume.scores,
+      extractedData: JSON.parse(JSON.stringify(resume.extractedData)),
+    };
+    resume.versions = [newVer, ...versions];
+    resume.currentVersion = nextVerNum;
+    resume.updatedAt = new Date().toISOString();
+    this.resumes.set(resumeId, resume);
+    return newVer;
+  }
+
+  revertResumeVersion(resumeId: string, versionId: string): Resume | undefined {
+    const resume = this.resumes.get(resumeId);
+    if (!resume) return undefined;
+    const versions = this.getResumeVersions(resumeId);
+    const targetVer = versions.find((v) => v.id === versionId);
+    if (!targetVer) return undefined;
+
+    resume.extractedData = JSON.parse(JSON.stringify(targetVer.extractedData));
+    resume.atsScore = targetVer.atsScore;
+    resume.scores = JSON.parse(JSON.stringify(targetVer.scores));
+    resume.currentVersion = targetVer.versionNumber;
+    resume.updatedAt = new Date().toISOString();
+    this.resumes.set(resumeId, resume);
+    return resume;
+  }
+
+  compareResumeVersions(
+    resumeId: string,
+    v1Id: string,
+    v2Id: string
+  ): ResumeComparisonResult | undefined {
+    const resume = this.resumes.get(resumeId);
+    if (!resume) return undefined;
+    const versions = this.getResumeVersions(resumeId);
+    const versionA = versions.find((v) => v.id === v1Id);
+    const versionB = versions.find((v) => v.id === v2Id);
+    if (!versionA || !versionB) return undefined;
+
+    const scoreDelta = {
+      overall: versionB.scores.overall - versionA.scores.overall,
+      keywordMatch: versionB.scores.keywordMatch - versionA.scores.keywordMatch,
+      skillsMatch: versionB.scores.skillsMatch - versionA.scores.skillsMatch,
+      formattingScore: versionB.scores.formattingScore - versionA.scores.formattingScore,
+      experienceRelevance: versionB.scores.experienceRelevance - versionA.scores.experienceRelevance,
+      educationRelevance: versionB.scores.educationRelevance - versionA.scores.educationRelevance,
+    };
+
+    const skillsA = versionA.extractedData.skills || [];
+    const skillsB = versionB.extractedData.skills || [];
+    const addedSkills = skillsB.filter(
+      (b) => !skillsA.some((a) => a.toLowerCase().trim() === b.toLowerCase().trim())
+    );
+    const removedSkills = skillsA.filter(
+      (a) => !skillsB.some((b) => b.toLowerCase().trim() === a.toLowerCase().trim())
+    );
+    const retainedSkills = skillsB.filter((b) =>
+      skillsA.some((a) => a.toLowerCase().trim() === b.toLowerCase().trim())
+    );
+
+    const expA = versionA.extractedData.experience || [];
+    const expB = versionB.extractedData.experience || [];
+    let bulletsModifiedCount = 0;
+
+    const roleComparisons = expB.map((roleB) => {
+      const matchedRoleA = expA.find(
+        (r) =>
+          r.company.toLowerCase() === roleB.company.toLowerCase() ||
+          r.role.toLowerCase() === roleB.role.toLowerCase()
+      );
+      const bulletsA = matchedRoleA?.bulletPoints || [];
+      const bulletsB = roleB.bulletPoints || [];
+
+      const addedBullets = bulletsB.filter((b) => !bulletsA.includes(b));
+      const removedBullets = bulletsA.filter((a) => !bulletsB.includes(a));
+      bulletsModifiedCount += addedBullets.length + removedBullets.length;
+
+      return {
+        roleTitle: roleB.role,
+        company: roleB.company,
+        bulletsA,
+        bulletsB,
+        addedBullets,
+        removedBullets,
+      };
+    });
+
+    const projA = (versionA.extractedData.projects || []).map((p) => p.title);
+    const projB = (versionB.extractedData.projects || []).map((p) => p.title);
+    const addedProjects = projB.filter((p) => !projA.includes(p));
+    const removedProjects = projA.filter((p) => !projB.includes(p));
+    const retainedProjects = projB.filter((p) => projA.includes(p));
+
+    const techA = (versionA.extractedData.projects || []).flatMap((p) => p.technologies || []);
+    const techB = (versionB.extractedData.projects || []).flatMap((p) => p.technologies || []);
+    const techStackAdditions = Array.from(new Set(techB.filter((t) => !techA.includes(t))));
+
+    const fmtA = versionA.extractedData.formattingIssues || [];
+    const fmtB = versionB.extractedData.formattingIssues || [];
+    const resolvedIssues = fmtA.filter((issue) => !fmtB.includes(issue));
+    const newIssues = fmtB.filter((issue) => !fmtA.includes(issue));
+    const commonIssues = fmtB.filter((issue) => fmtA.includes(issue));
+
+    return {
+      versionA,
+      versionB,
+      scoreDelta,
+      skillsDiff: {
+        added: addedSkills,
+        removed: removedSkills,
+        retained: retainedSkills,
+      },
+      experienceDiff: {
+        totalRolesA: expA.length,
+        totalRolesB: expB.length,
+        bulletsModifiedCount,
+        roleComparisons,
+      },
+      projectsDiff: {
+        addedProjects,
+        removedProjects,
+        retainedProjects,
+        techStackAdditions,
+      },
+      formattingDiff: {
+        resolvedIssues,
+        newIssues,
+        commonIssues,
+      },
+    };
+  }
+
   // --- Jobs ---
   getAllJobs(): Job[] {
     return Array.from(this.jobs.values()).sort(
@@ -1073,6 +1380,10 @@ class InMemoryDatabase {
     const updated = { ...existing, ...updates };
     this.jobs.set(id, updated);
     return updated;
+  }
+
+  deleteJob(id: string): boolean {
+    return this.jobs.delete(id);
   }
 
   // --- Applications ---
@@ -1320,6 +1631,10 @@ class InMemoryDatabase {
     };
     this.notifications.set(id, newNotif);
     return newNotif;
+  }
+
+  getNotificationById(id: string): Notification | undefined {
+    return this.notifications.get(id);
   }
 
   markNotificationAsRead(id: string): boolean {

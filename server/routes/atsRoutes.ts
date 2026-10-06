@@ -1,42 +1,53 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database.js';
-import { getAuthenticatedUserId } from './authRoutes.js';
+import { requireAuth } from './authRoutes.js';
 import { calculateAtsScore } from '../ai/geminiService.js';
 
 const router = Router();
 
+// Apply authentication to all ATS endpoints
+router.use(requireAuth);
+
 // ATS Simulation on demand
 router.post('/analyze', async (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const user = (req as any).user;
     const { resumeId, resumeText, jobDescription } = req.body;
 
     let targetText = resumeText || '';
     if (resumeId) {
       const resume = db.getResumeById(resumeId);
-      if (resume) {
-        targetText =
-          resume.rawText ||
-          `${resume.extractedData.name} ${resume.extractedData.headline} ${resume.extractedData.skills.join(
-            ', '
-          )} ${resume.extractedData.summary}`;
+      if (!resume) {
+        return res.status(404).json({ error: 'Resume not found' });
       }
+      if (resume.studentId !== user.id) {
+        return res.status(403).json({ error: "Forbidden: Access denied to another student's resume" });
+      }
+      targetText =
+        resume.rawText ||
+        `${resume.extractedData.name} ${resume.extractedData.headline} ${resume.extractedData.skills.join(
+          ', '
+        )} ${resume.extractedData.summary}`;
     }
 
     if (!targetText) {
-      // Default to demo resume text
-      targetText =
-        'Alex Johnson Full-Stack Software Engineer React TypeScript Node.js Python PostgreSQL Docker Git Gemini AI REST APIs System Design';
+      // Build text from student profile or default placeholder
+      const studentProfile = db.getStudentProfileByUserId(user.id);
+      targetText = `${user.displayName || 'Candidate'} ${studentProfile?.headline || 'Software Engineer'} ${(studentProfile?.skills || []).join(' ')} ${studentProfile?.bio || ''}`.trim();
+    }
+
+    if (!targetText) {
+      targetText = 'Software Engineer React TypeScript Node.js Python PostgreSQL Docker Git REST APIs';
     }
 
     const defaultJd =
       jobDescription ||
-      'Looking for a Full-Stack Engineer with experience in React, TypeScript, Node.js, REST APIs, PostgreSQL, Docker, and modern AI SDKs.';
+      'Looking for a Full-Stack Engineer with experience in React, TypeScript, Node.js, REST APIs, PostgreSQL, Docker, and modern cloud technologies.';
 
     const result = await calculateAtsScore(targetText, defaultJd);
 
     db.logAiUsage({
-      userId,
+      userId: user.id,
       feature: 'ATS Scoring & Match Simulator',
       model: 'gemini-3.8-flash',
       inputTokens: 900,
@@ -53,21 +64,25 @@ router.post('/analyze', async (req: Request, res: Response) => {
 // Compare against specific Job
 router.post('/job-match', async (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const user = (req as any).user;
     const { resumeId, jobId } = req.body;
 
     const resume = db.getResumeById(resumeId);
-    const job = db.getJobById(jobId);
+    if (!resume) {
+      return res.status(404).json({ error: 'Resume not found' });
+    }
+    if (resume.studentId !== user.id) {
+      return res.status(403).json({ error: "Forbidden: Access denied to another student's resume" });
+    }
 
+    const job = db.getJobById(jobId);
     if (!job) {
       return res.status(404).json({ error: 'Job not found' });
     }
 
     const resumeText =
-      resume?.rawText ||
-      (resume
-        ? `${resume.extractedData.name} ${resume.extractedData.headline} ${resume.extractedData.skills.join(', ')}`
-        : 'Full stack developer');
+      resume.rawText ||
+      `${resume.extractedData.name} ${resume.extractedData.headline} ${resume.extractedData.skills.join(', ')}`;
 
     const jobDescription = `${job.title} ${job.description} Required Skills: ${job.requiredSkills.join(
       ', '
@@ -87,9 +102,15 @@ router.post('/job-match', async (req: Request, res: Response) => {
 
 // Get inspector details by resume ID
 router.get('/inspector/:id', (req: Request, res: Response) => {
+  const user = (req as any).user;
   const resume = db.getResumeById(req.params.id);
   if (!resume) {
     return res.status(404).json({ error: 'Resume not found' });
+  }
+
+  // Verify ownership (allow recruiter/admin to inspect candidate resumes)
+  if (user.role !== 'recruiter' && user.role !== 'admin' && resume.studentId !== user.id) {
+    return res.status(403).json({ error: "Forbidden: Access denied to another student's resume" });
   }
 
   // Generate line-by-line inspection analysis
@@ -97,10 +118,9 @@ router.get('/inspector/:id', (req: Request, res: Response) => {
   const sampleLines = lines.length
     ? lines
     : [
-        'Alex Johnson | alex.johnson@example.com | (555) 234-5678',
-        'Full-Stack Software Engineer & Applied AI Enthusiast',
-        'Education: California Institute of Technology - B.S. in Computer Science',
-        'Skills: TypeScript, React, Node.js, Python, PostgreSQL, Docker, Git',
+        `${resume.extractedData.name || user.displayName || 'Candidate'} | ${user.email}`,
+        resume.extractedData.headline || 'Full-Stack Software Engineer',
+        `Skills: ${resume.extractedData.skills.join(', ')}`,
         'Nexus Software Labs - Software Engineering Intern',
         'Spearheaded development of high-throughput REST API servicing 45,000 daily requests',
         'Optimized PostgreSQL queries decreasing latency by 32%',

@@ -1,15 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/database.js';
-import { getAuthenticatedUserId } from './authRoutes.js';
+import { requireAuth, requireRole } from './authRoutes.js';
 import { generateJobDescriptionWithAI, evaluateCandidateForRecruiter, polishTextWithAI } from '../ai/geminiService.js';
 
 const router = Router();
 
+// Enforce authentication and recruiter role across all recruiter endpoints
+router.use(requireAuth);
+router.use(requireRole(['recruiter', 'admin']));
+
 // Recruiter Profile
 router.get('/profile', (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
+  const user = (req as any).user;
+  const userId = user.id;
   let profile = db.getRecruiterProfileByUserId(userId);
-  const user = db.getUserById(userId);
 
   if (!profile) {
     profile = db.createOrUpdateRecruiterProfile(
@@ -24,7 +28,8 @@ router.get('/profile', (req: Request, res: Response) => {
 
 // Update Recruiter Profile
 router.put('/profile', (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
+  const user = (req as any).user;
+  const userId = user.id;
   const { designation, phone, companyName, companyDescription, companyDomain, companyLocation, industry, size } =
     req.body;
 
@@ -46,8 +51,8 @@ router.put('/profile', (req: Request, res: Response) => {
 
 // Recruiter Dashboard KPIs & Pipeline
 router.get('/dashboard', (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
-  const user = db.getUserById(userId);
+  const user = (req as any).user;
+  const userId = user.id;
   const profile = db.getRecruiterProfileByUserId(userId);
   const allJobs = db.getAllJobs();
   const allCandidates = db.getAllStudentCandidates();
@@ -102,7 +107,8 @@ router.get('/jobs', (req: Request, res: Response) => {
 // Create Job
 router.post('/jobs', (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const user = (req as any).user;
+    const userId = user.id;
     const profile = db.getRecruiterProfileByUserId(userId);
     const {
       title,
@@ -170,7 +176,8 @@ router.post('/jobs/:id/publish', (req: Request, res: Response) => {
 // Generate Job Description with Gemini
 router.post('/generate-job-desc', async (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
+    const user = (req as any).user;
+    const userId = user.id;
     const { title, skills, experienceLevel, companyName } = req.body;
 
     const result = await generateJobDescriptionWithAI({
@@ -197,13 +204,50 @@ router.post('/generate-job-desc', async (req: Request, res: Response) => {
 
 // Polish Company Description with Gemini
 router.post('/improve-text', async (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
+  const user = (req as any).user;
+  const userId = user.id;
   const { text } = req.body;
   const improved = await polishTextWithAI(text, 'company_description');
   return res.json({ improvedText: improved });
 });
 
-// Candidate Search & Filtering
+// List & Search Candidates (GET)
+router.get('/candidates', (req: Request, res: Response) => {
+  const { query, skill, location, minReadiness, minAts } = req.query as Record<string, string>;
+  let candidates = db.getAllStudentCandidates();
+
+  if (query) {
+    const q = query.toLowerCase();
+    candidates = candidates.filter(
+      (c) =>
+        c.user?.displayName?.toLowerCase().includes(q) ||
+        c.headline?.toLowerCase().includes(q) ||
+        c.skills.some((s) => s.toLowerCase().includes(q))
+    );
+  }
+
+  if (skill) {
+    const s = skill.toLowerCase();
+    candidates = candidates.filter((c) => c.skills.some((sk) => sk.toLowerCase().includes(s)));
+  }
+
+  if (location) {
+    const loc = location.toLowerCase();
+    candidates = candidates.filter((c) => c.location?.toLowerCase().includes(loc));
+  }
+
+  if (minReadiness) {
+    candidates = candidates.filter((c) => c.readinessScore >= parseInt(minReadiness));
+  }
+
+  if (minAts) {
+    candidates = candidates.filter((c) => (c.primaryResume?.atsScore || 80) >= parseInt(minAts));
+  }
+
+  return res.json({ candidates });
+});
+
+// Candidate Search & Filtering (POST)
 router.post('/candidates/search', (req: Request, res: Response) => {
   const { query, skill, location, minReadiness, minAts } = req.body;
   let candidates = db.getAllStudentCandidates();
@@ -242,7 +286,6 @@ router.post('/candidates/search', (req: Request, res: Response) => {
 // Candidate Dossier Detail
 router.get('/candidates/:id', async (req: Request, res: Response) => {
   try {
-    const userId = getAuthenticatedUserId(req);
     const candidateProfile = db.getStudentProfileById(req.params.id);
 
     if (!candidateProfile) {
@@ -276,7 +319,8 @@ router.get('/candidates/:id', async (req: Request, res: Response) => {
 
 // Shortlist Candidate
 router.post('/candidates/:id/shortlist', (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
+  const user = (req as any).user;
+  const userId = user.id;
   const candidate = db.getStudentProfileById(req.params.id);
 
   if (!candidate) {
@@ -294,7 +338,7 @@ router.post('/candidates/:id/shortlist', (req: Request, res: Response) => {
 
   db.logAudit({
     userId,
-    userName: db.getUserById(userId)?.displayName || 'Recruiter',
+    userName: user.displayName || 'Recruiter',
     role: 'recruiter',
     action: 'CANDIDATE_SHORTLISTED',
     ipAddress: '127.0.0.1',
@@ -307,7 +351,7 @@ router.post('/candidates/:id/shortlist', (req: Request, res: Response) => {
 
 // Invite Candidate to Apply / Interview
 router.post('/candidates/:id/invite', (req: Request, res: Response) => {
-  const userId = getAuthenticatedUserId(req);
+  const user = (req as any).user;
   const { jobId, message } = req.body;
   const candidate = db.getStudentProfileById(req.params.id);
 
