@@ -37,6 +37,28 @@ export const CareerGuidancePage: React.FC = () => {
     return <div className="p-8 text-center text-xs text-slate-500">Synthesizing career recommendations...</div>;
   }
 
+  if (currentSkills.length === 0 && recommendations.length === 0) {
+    return (
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-10 shadow-xs text-center space-y-4 max-w-2xl mx-auto my-8">
+        <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto">
+          <Compass className="w-7 h-7" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">No Career Guidance Available Yet</h2>
+          <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+            Upload your resume to unlock your ATS score, profile insights, and career recommendations.
+          </p>
+        </div>
+        <Link
+          to="/student/resumes/upload"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+        >
+          <Sparkles className="w-4 h-4" /> Upload Resume
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}

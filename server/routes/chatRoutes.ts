@@ -5,7 +5,7 @@ import { generateChatbotResponse, ChatUserContext } from '../ai/geminiService.js
 
 const router = Router();
 
-// POST /api/chat/message -> process chat message with Gemini AI and student personalization
+// POST /api/chat/message -> process chat message with Gemini AI and strict student personalization
 router.post('/message', async (req: Request, res: Response) => {
   try {
     const { message, history } = req.body;
@@ -29,27 +29,59 @@ router.post('/message', async (req: Request, res: Response) => {
           const roadmap = db.getRoadmapByStudentId(userId);
           const interviewSessions = db.getInterviewSessionsByStudentId(userId);
 
+          // Extract purely verified, actual student data (Zero hallucinated or fake fallbacks)
+          const profileSkills = Array.isArray(profile?.skills) ? profile.skills : [];
+          const resumeSkills = Array.isArray(primaryResume?.extractedData?.skills) ? primaryResume.extractedData.skills : [];
+          const combinedSkills = Array.from(new Set([...profileSkills, ...resumeSkills]));
+
+          const educationItems = (profile?.education && profile.education.length > 0)
+            ? profile.education
+            : (primaryResume?.extractedData?.education || []);
+
+          const experienceItems = (profile?.experience && profile.experience.length > 0)
+            ? profile.experience
+            : (primaryResume?.extractedData?.experience || []);
+
+          const projectItems = (profile?.projects && profile.projects.length > 0)
+            ? profile.projects
+            : (primaryResume?.extractedData?.projects || []);
+
+          const certItems = (profile?.certifications && profile.certifications.length > 0)
+            ? profile.certifications
+            : (primaryResume?.extractedData?.certifications || []);
+
+          const targetRoles = Array.isArray(profile?.targetRoles) ? profile.targetRoles : [];
+
           userContext = {
             userId: user.id,
             role: 'student',
             name: user.displayName || 'Candidate',
             email: user.email,
             headline: profile?.headline,
-            skills: profile?.skills || primaryResume?.extractedData?.skills || [],
-            education: profile?.education?.[0]
-              ? `${profile.education[0].degree} in ${profile.education[0].field} (${profile.education[0].institution})`
-              : 'Computer Science',
+            bio: profile?.bio,
+            hasResume: !!primaryResume,
+            skills: combinedSkills,
+            education: educationItems,
+            experience: experienceItems,
+            projects: projectItems,
+            certifications: certItems,
+            targetRoles: targetRoles,
+            careerInterests: targetRoles,
             primaryResume: primaryResume
               ? {
                   id: primaryResume.id,
                   filename: primaryResume.filename,
+                  hasAtsScore: typeof primaryResume.atsScore === 'number',
                   atsScore: primaryResume.atsScore,
                   keywordScore: primaryResume.scores?.keywordMatch,
                   formattingScore: primaryResume.scores?.formattingScore,
-                  extractedSkills: primaryResume.extractedData?.skills,
-                  missingSkills: primaryResume.recommendations?.missingSkills,
-                  recommendations: primaryResume.recommendations?.resumeImprovements,
-                  formattingIssues: primaryResume.extractedData?.formattingIssues,
+                  experienceScore: primaryResume.scores?.experienceRelevance,
+                  educationScore: primaryResume.scores?.educationRelevance,
+                  extractedSkills: primaryResume.extractedData?.skills || [],
+                  missingSkills: primaryResume.recommendations?.missingSkills || [],
+                  recommendations: primaryResume.recommendations?.resumeImprovements || [],
+                  formattingIssues: primaryResume.extractedData?.formattingIssues || [],
+                  actionVerbSuggestions: primaryResume.extractedData?.actionVerbSuggestions || [],
                 }
               : undefined,
             applicationsCount: applications.length,
@@ -57,7 +89,7 @@ router.post('/message', async (req: Request, res: Response) => {
               roadmap && roadmap.length > 0
                 ? `${roadmap.length} active 30-60-90 milestone phases (${roadmap[0].phaseTitle})`
                 : undefined,
-            recentMockScore: interviewSessions[0]?.turns?.[0]?.score || 85,
+            recentMockScore: interviewSessions[0]?.turns?.[0]?.score,
           };
         } else if (user.role === 'recruiter') {
           const profile = db.getRecruiterProfileByUserId(userId);
@@ -68,8 +100,16 @@ router.post('/message', async (req: Request, res: Response) => {
             role: 'recruiter',
             name: user.displayName || 'Recruiter',
             email: user.email,
-            companyName: profile?.company?.name || 'CareerPilot Demo Technologies',
+            companyName: profile?.company?.name || 'Recruiter Company',
             openJobsCount: jobs.filter((j) => j.status === 'published').length,
+            hasResume: false,
+            skills: [],
+            education: [],
+            experience: [],
+            projects: [],
+            certifications: [],
+            targetRoles: [],
+            careerInterests: [],
           };
         }
       }
@@ -118,22 +158,44 @@ router.get('/initial', (req: Request, res: Response) => {
       const resumes = db.getResumesByStudentId(userId);
       const primaryResume = resumes.find((r) => r.isPrimary) || resumes[0];
 
-      const atsScore = primaryResume?.atsScore || 88;
-      const skills = profile?.skills || primaryResume?.extractedData?.skills || [];
-      const missingSkills = primaryResume?.recommendations?.missingSkills || ['Docker', 'Redis', 'Kubernetes'];
+      const profileSkills = Array.isArray(profile?.skills) ? profile.skills : [];
+      const resumeSkills = Array.isArray(primaryResume?.extractedData?.skills) ? primaryResume.extractedData.skills : [];
+      const skills = Array.from(new Set([...profileSkills, ...resumeSkills]));
 
-      return res.json({
-        greeting: `Hi **${user.displayName || 'there'}**! I'm your **CareerPilot Copilot**. I have access to your active profile (${skills.slice(0, 3).join(', ')}) and your primary resume (ATS score: **${atsScore}/100**). How can I assist your career progression today?`,
-        suggestions: [
-          'What should I learn to become a Data Scientist?',
-          `How can I improve my ${atsScore}% ATS score?`,
-          `How do I bridge gaps in ${missingSkills.slice(0, 2).join(' & ')}?`,
-          'Give me 3 technical interview questions',
-        ],
-        personalized: true,
-        studentName: user.displayName,
-        atsScore,
-      });
+      // Check if student has actual resume and ATS score
+      if (primaryResume && typeof primaryResume.atsScore === 'number') {
+        const atsScore = primaryResume.atsScore;
+        const missingSkills = primaryResume.recommendations?.missingSkills || [];
+
+        return res.json({
+          greeting: `Hi **${user.displayName || 'Candidate'}**! I'm your **CareerPilot AI Assistant**. I have access to your CareerPilot AI profile (${skills.length > 0 ? skills.slice(0, 3).join(', ') : 'Profile created'}) and your primary resume (ATS score: **${atsScore}/100**). How can I assist your career progression today?`,
+          suggestions: [
+            'What should I learn to become a Data Scientist?',
+            `How can I improve my ${atsScore}% ATS score?`,
+            missingSkills.length > 0
+              ? `How do I bridge gaps in ${missingSkills.slice(0, 2).join(' & ')}?`
+              : 'What skills should I learn next?',
+            'Give me 3 technical interview questions',
+          ],
+          personalized: true,
+          studentName: user.displayName,
+          atsScore,
+        });
+      } else {
+        // First-time user / no resume uploaded yet: strictly NO fake ATS score or fake resume info
+        return res.json({
+          greeting: `Hi **${user.displayName || 'Candidate'}**! I'm your **CareerPilot AI Assistant**. You haven't uploaded a resume to CareerPilot AI yet. Upload your resume in **Resume Management** to get instant ATS scoring, keyword match diagnostics, and personalized role readiness! How can I assist you today?`,
+          suggestions: [
+            'How do I build an ATS-friendly resume from scratch?',
+            'What skills should I add to my profile for Software Engineering?',
+            'What projects stand out to tech recruiters?',
+            'Give me a 30-day technical interview prep plan',
+          ],
+          personalized: true,
+          studentName: user.displayName,
+          atsScore: undefined,
+        });
+      }
     } else if (user && user.role === 'recruiter') {
       return res.json({
         greeting: `Welcome, **${user.displayName || 'Recruiter'}**! I'm your CareerPilot Hiring Copilot. I can assist with writing compelling job descriptions, structuring interview rubrics, and evaluating candidate technical competencies.`,

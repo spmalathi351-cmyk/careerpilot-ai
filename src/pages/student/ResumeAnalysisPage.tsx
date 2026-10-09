@@ -46,7 +46,17 @@ export const ResumeAnalysisPage: React.FC = () => {
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTargetJob, setSelectedTargetJob] = useState<string>('full-stack');
+  const [resumes, setResumes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    api
+      .getResumes()
+      .then((res) => setResumes(res.resumes || []))
+      .catch((err) => console.warn(err))
+      .finally(() => setLoading(false));
+  }, []);
 
   // Benchmarks for different role requirements compared to the candidate's parsed resume
   const roleBenchmarks: Record<string, BenchmarkProfile> = {
@@ -219,6 +229,12 @@ export const ResumeAnalysisPage: React.FC = () => {
   ];
 
   const runPipeline = async () => {
+    const primaryResume = resumes[0];
+    if (!primaryResume) {
+      navigate('/student/resumes/upload');
+      return;
+    }
+
     setRunning(true);
     setError(null);
     setCompleted(false);
@@ -230,25 +246,38 @@ export const ResumeAnalysisPage: React.FC = () => {
       await new Promise((resolve) => setTimeout(resolve, 450));
     }
 
-    try {
-      // Trigger actual server analysis
-      const res = await api.uploadResume({
-        filename: 'Alex_Johnson_Software_Engineer_2026.pdf',
-        fileSize: 184500,
-      });
-
-      setCompleted(true);
-      setRunning(false);
-      setTimeout(() => {
-        navigate(`/student/resumes/${res.resume.id}/diagnostic`);
-      }, 1000);
-    } catch (err: any) {
-      console.warn('Pipeline error:', err);
-      setCompleted(true);
-      setRunning(false);
-      navigate('/student/resumes');
-    }
+    setCompleted(true);
+    setRunning(false);
+    setTimeout(() => {
+      navigate(`/student/resumes/${primaryResume.id}/diagnostic`);
+    }, 1000);
   };
+
+  if (loading) {
+    return <div className="p-8 text-center text-xs text-slate-500">Loading resume analysis...</div>;
+  }
+
+  if (resumes.length === 0) {
+    return (
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-10 shadow-xs text-center space-y-4 max-w-2xl mx-auto my-8">
+        <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto">
+          <Sparkles className="w-7 h-7" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">No Resume Uploaded Yet</h2>
+          <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+            Upload your resume to unlock your ATS score, profile insights, and career recommendations.
+          </p>
+        </div>
+        <Link
+          to="/student/resumes/upload"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+        >
+          <FileText className="w-4 h-4" /> Upload Resume
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">

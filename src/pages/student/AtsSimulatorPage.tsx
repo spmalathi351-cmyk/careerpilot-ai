@@ -27,24 +27,26 @@ export const AtsSimulatorPage: React.FC = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
 
+  const [loading, setLoading] = useState(true);
   const { showToast } = useNotifications();
   const navigate = useNavigate();
 
   useEffect(() => {
     // Load student resumes and active jobs
-    Promise.all([api.getResumes(), api.getJobs()]).then(([resRes, jobsRes]) => {
-      setResumes(resRes.resumes);
-      if (resRes.resumes.length > 0) {
-        setSelectedResumeId(resRes.resumes[0].id);
-      }
-      setJobs(jobsRes.jobs);
-      if (jobsRes.jobs.length > 0) {
-        setSelectedJobId(jobsRes.jobs[0].id);
-      }
-
-      // Initial ATS analysis
-      handleAnalyze(resRes.resumes[0]?.id);
-    });
+    Promise.all([api.getResumes(), api.getJobs()])
+      .then(([resRes, jobsRes]) => {
+        setResumes(resRes.resumes);
+        if (resRes.resumes.length > 0) {
+          setSelectedResumeId(resRes.resumes[0].id);
+          // Initial ATS analysis only if resume exists
+          handleAnalyze(resRes.resumes[0].id);
+        }
+        setJobs(jobsRes.jobs);
+        if (jobsRes.jobs.length > 0) {
+          setSelectedJobId(jobsRes.jobs[0].id);
+        }
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const handleJobSelect = (jobId: string) => {
@@ -74,6 +76,32 @@ export const AtsSimulatorPage: React.FC = () => {
       setAnalyzing(false);
     }
   };
+
+  if (loading) {
+    return <div className="p-8 text-center text-xs text-slate-500">Loading ATS Simulator...</div>;
+  }
+
+  if (resumes.length === 0) {
+    return (
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-10 shadow-xs text-center space-y-4 max-w-2xl mx-auto my-8">
+        <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+          <Target className="w-7 h-7" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">No Resume to Simulate</h2>
+          <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+            Upload your resume to unlock your ATS score, profile insights, and career recommendations.
+          </p>
+        </div>
+        <Link
+          to="/student/resumes/upload"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+        >
+          <FileText className="w-4 h-4" /> Upload Resume
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">

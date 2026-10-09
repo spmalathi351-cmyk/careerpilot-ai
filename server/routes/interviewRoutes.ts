@@ -22,9 +22,13 @@ router.get('/prep', async (req: Request, res: Response) => {
 
     const pastSessions = db.getInterviewSessionsByStudentId(userId);
 
+    const resumes = db.getResumesByStudentId(userId);
+    const hasResume = resumes.length > 0;
+
     return res.json({
       targetRole,
-      readinessScore: profile?.readinessScore || 85,
+      readinessScore: hasResume ? (profile?.readinessScore || 0) : 0,
+      hasResume,
       technicalQuestions,
       behavioralQuestions,
       pastSessions,

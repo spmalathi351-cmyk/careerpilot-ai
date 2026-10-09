@@ -108,10 +108,24 @@ export const JobRecommendationEngine: React.FC<{ compact?: boolean }> = ({ compa
     );
   }
 
-  if (!data || data.recommendations.length === 0) {
+  if (!data?.resumeUsed || data.recommendations.length === 0) {
     return (
-      <div className="bg-white border border-slate-200 rounded-3xl p-8 text-center text-slate-500 text-xs">
-        No active job postings found to match against.
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-8 shadow-xs text-center space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto">
+          <Briefcase className="w-6 h-6" />
+        </div>
+        <div>
+          <h3 className="font-bold text-base text-slate-900">AI Job Recommendation &amp; Match Engine</h3>
+          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+            Upload your resume to unlock your ATS score, profile insights, and career recommendations.
+          </p>
+        </div>
+        <Link
+          to="/student/resumes/upload"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+        >
+          <FileText className="w-4 h-4" /> Upload Resume
+        </Link>
       </div>
     );
   }

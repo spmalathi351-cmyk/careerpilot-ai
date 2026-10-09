@@ -50,12 +50,13 @@ export const StudentDashboard: React.FC = () => {
   }
 
   const primaryResume = data?.primaryResume;
-  const atsScore = data?.latestAtsScore || 91;
-  const readiness = data?.readinessScore || 88;
-  const completeness = data?.profileCompleteness || 90;
-  const appsSummary = data?.applicationsSummary || { total: 3, applied: 1, screening: 1, interview: 1, offer: 0 };
+  const hasResume = !!primaryResume && data?.hasResume !== false;
+  const atsScore = hasResume && typeof data?.latestAtsScore === 'number' ? data.latestAtsScore : null;
+  const readiness = hasResume ? (data?.readinessScore || 0) : 0;
+  const completeness = data?.profileCompleteness || 0;
+  const appsSummary = data?.applicationsSummary || { total: 0, applied: 0, screening: 0, interview: 0, offer: 0 };
   const recommendedRoles = data?.recommendedRoles || [];
-  const skillGaps = data?.skillGaps || ['Docker', 'Kubernetes', 'Redis Caching'];
+  const skillGaps = data?.skillGaps || [];
 
   return (
     <div className="space-y-8">
@@ -71,8 +72,14 @@ export const StudentDashboard: React.FC = () => {
               Welcome back, {user?.displayName || 'Student'}!
             </h1>
             <p className="text-xs sm:text-sm text-indigo-200 max-w-xl">
-              Your profile is {completeness}% complete. Your primary resume is calibrated with an estimated ATS score of{' '}
-              <span className="font-bold text-white">{atsScore}/100</span>.
+              {hasResume && atsScore !== null ? (
+                <>
+                  Your profile is {completeness}% complete. Your primary resume is calibrated with an ATS score of{' '}
+                  <span className="font-bold text-white">{atsScore}/100</span>.
+                </>
+              ) : (
+                'Upload your resume to unlock your ATS score, profile insights, and career recommendations.'
+              )}
             </p>
           </div>
 
@@ -97,28 +104,27 @@ export const StudentDashboard: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="ATS Compatibility"
-          value={`${atsScore}%`}
-          subtitle={primaryResume?.filename || 'Primary Resume Analyzed'}
+          value={hasResume && atsScore !== null ? `${atsScore}%` : 'Not Calibrated'}
+          subtitle={hasResume ? (primaryResume?.filename || 'Primary Resume Analyzed') : 'Upload resume to calculate'}
           icon={Target}
-          trend={{ value: 'Top 8%', positive: true }}
-          accentColor="emerald"
-          onClick={() => navigate('/student/ats-simulator')}
+          trend={hasResume && atsScore !== null ? { value: `Score: ${atsScore}/100`, positive: atsScore >= 80 } : undefined}
+          accentColor={hasResume ? 'emerald' : 'slate'}
+          onClick={() => navigate(hasResume ? '/student/ats-simulator' : '/student/resumes/upload')}
         />
 
         <MetricCard
           title="Career Readiness"
-          value={`${readiness}/100`}
-          subtitle="Full-Stack & Applied AI track"
+          value={hasResume ? `${readiness}/100` : 'Not Available'}
+          subtitle={hasResume ? 'Profile & Resume Analyzed' : 'Upload resume to calculate'}
           icon={TrendingUp}
-          trend={{ value: '+6 pts', positive: true }}
-          accentColor="indigo"
-          onClick={() => navigate('/student/career-guidance')}
+          accentColor={hasResume ? 'indigo' : 'slate'}
+          onClick={() => navigate(hasResume ? '/student/career-guidance' : '/student/resumes/upload')}
         />
 
         <MetricCard
           title="Active Applications"
           value={appsSummary.total}
-          subtitle={`${appsSummary.interview} Interview, ${appsSummary.screening} Screening`}
+          subtitle={`${appsSummary.interview || 0} Interview, ${appsSummary.screening || 0} Screening`}
           icon={Briefcase}
           accentColor="blue"
           onClick={() => navigate('/student/applications')}
@@ -210,80 +216,98 @@ export const StudentDashboard: React.FC = () => {
         {/* Left Column (2 spans): ATS Diagnostic Snapshot + Recent Applications */}
         <div className="lg:col-span-2 space-y-6">
           {/* ATS Gauge Card */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs">
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
-              <div>
-                <h3 className="font-bold text-base text-slate-900">ATS Resume Diagnostic</h3>
-                <p className="text-xs text-slate-500">
-                  {primaryResume ? primaryResume.filename : 'No resume uploaded yet'}
-                </p>
-              </div>
-              {primaryResume && (
+          {hasResume && atsScore !== null && primaryResume ? (
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs">
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">ATS Resume Diagnostic</h3>
+                  <p className="text-xs text-slate-500">{primaryResume.filename}</p>
+                </div>
                 <Link
                   to={`/student/resumes/${primaryResume.id}/diagnostic`}
                   className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
                 >
                   Full Diagnostic Report <ChevronRight className="w-4 h-4" />
                 </Link>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 items-center">
-              <div className="flex justify-center sm:justify-start">
-                <ScoreGauge score={atsScore} label="Overall Match" size="md" />
               </div>
 
-              <div className="sm:col-span-2 space-y-3">
-                <div>
-                  <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                    <span>Keyword Density</span>
-                    <span className="text-indigo-600 font-bold">{primaryResume?.scores?.keywordMatch || 93}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-indigo-600 rounded-full"
-                      style={{ width: `${primaryResume?.scores?.keywordMatch || 93}%` }}
-                    />
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 items-center">
+                <div className="flex justify-center sm:justify-start">
+                  <ScoreGauge score={atsScore} label="Overall Match" size="md" />
                 </div>
 
-                <div>
-                  <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                    <span>Formatting &amp; Parseability</span>
-                    <span className="text-emerald-600 font-bold">{primaryResume?.scores?.formattingScore || 95}%</span>
+                <div className="sm:col-span-2 space-y-3">
+                  <div>
+                    <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
+                      <span>Keyword Density</span>
+                      <span className="text-indigo-600 font-bold">{primaryResume.scores?.keywordMatch || 0}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-indigo-600 rounded-full"
+                        style={{ width: `${primaryResume.scores?.keywordMatch || 0}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500 rounded-full"
-                      style={{ width: `${primaryResume?.scores?.formattingScore || 95}%` }}
-                    />
-                  </div>
-                </div>
 
-                <div>
-                  <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                    <span>Experience Relevance</span>
-                    <span className="text-blue-600 font-bold">{primaryResume?.scores?.experienceRelevance || 89}%</span>
+                  <div>
+                    <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
+                      <span>Formatting &amp; Parseability</span>
+                      <span className="text-emerald-600 font-bold">{primaryResume.scores?.formattingScore || 0}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 rounded-full"
+                        style={{ width: `${primaryResume.scores?.formattingScore || 0}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-blue-500 rounded-full"
-                      style={{ width: `${primaryResume?.scores?.experienceRelevance || 89}%` }}
-                    />
-                  </div>
-                </div>
 
-                <div className="pt-2 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-slate-500 font-medium">Recommended Additions:</span>
-                  {skillGaps.slice(0, 3).map((skill: string) => (
-                    <span key={skill} className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-md text-[11px] font-semibold">
-                      +{skill}
-                    </span>
-                  ))}
+                  <div>
+                    <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
+                      <span>Experience Relevance</span>
+                      <span className="text-blue-600 font-bold">{primaryResume.scores?.experienceRelevance || 0}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 rounded-full"
+                        style={{ width: `${primaryResume.scores?.experienceRelevance || 0}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {skillGaps.length > 0 && (
+                    <div className="pt-2 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="text-slate-500 font-medium">Recommended Additions:</span>
+                      {skillGaps.slice(0, 3).map((skill: string) => (
+                        <span key={skill} className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-md text-[11px] font-semibold">
+                          +{skill}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-8 shadow-xs text-center space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto">
+                <Target className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-slate-900">No ATS Score Available</h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+                  Upload your resume to unlock your ATS score, profile insights, and career recommendations.
+                </p>
+              </div>
+              <Link
+                to="/student/resumes/upload"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+              >
+                <FileText className="w-4 h-4" /> Upload Resume
+              </Link>
+            </div>
+          )}
 
           {/* Recent Applications Pipeline */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs">

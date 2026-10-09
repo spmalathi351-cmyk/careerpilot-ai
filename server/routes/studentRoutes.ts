@@ -16,11 +16,18 @@ router.get('/profile', (req: Request, res: Response) => {
   let profile = db.getStudentProfileByUserId(userId);
 
   if (!profile) {
-    // Generate default profile
+    // Generate empty profile for student
     profile = db.createOrUpdateStudentProfile(userId, {
-      headline: 'Candidate & Engineering Student',
+      headline: '',
       bio: '',
-      skills: ['TypeScript', 'React', 'Python'],
+      skills: [],
+      education: [],
+      experience: [],
+      projects: [],
+      certifications: [],
+      targetRoles: [],
+      readinessScore: 0,
+      atsAverage: 0,
     });
   }
 
@@ -82,21 +89,27 @@ router.get('/dashboard', async (req: Request, res: Response) => {
   const interviews = db.getInterviewSessionsByStudentId(userId);
   const notifications = db.getNotificationsByUserId(userId).slice(0, 5);
 
-  // Recommended roles
-  const recommendations = await generateCareerGuidance(
-    profile.skills,
-    profile.education[0]?.field || 'Computer Science',
-    profile.targetRoles
-  );
+  const hasResume = !!primaryResume;
+
+  // Recommended roles only if student has actual resume or profile skills
+  let recommendations: any[] = [];
+  if (hasResume || (profile.skills && profile.skills.length > 0)) {
+    recommendations = await generateCareerGuidance(
+      profile.skills,
+      profile.education[0]?.field || 'Computer Science',
+      profile.targetRoles
+    );
+  }
 
   return res.json({
     user,
     profile,
     resumesCount: resumes.length,
-    primaryResume,
-    latestAtsScore: primaryResume?.atsScore || 85,
-    readinessScore: profile.readinessScore || 82,
-    profileCompleteness: profile.profileCompleteness || 85,
+    primaryResume: primaryResume || null,
+    hasResume,
+    latestAtsScore: hasResume && typeof primaryResume.atsScore === 'number' ? primaryResume.atsScore : null,
+    readinessScore: hasResume ? (profile.readinessScore || 0) : 0,
+    profileCompleteness: profile.profileCompleteness || 0,
     applicationsSummary: {
       total: applications.length,
       applied: applications.filter((a) => a.stage === 'Applied').length,
@@ -110,7 +123,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
     recentInterviews: interviews.slice(0, 3),
     notifications,
     recommendedRoles: recommendations.slice(0, 3),
-    skillGaps: primaryResume?.recommendations?.missingSkills || ['Kubernetes', 'Redis', 'Docker'],
+    skillGaps: hasResume ? (primaryResume.recommendations?.missingSkills || []) : [],
   });
 });
 
@@ -143,22 +156,22 @@ router.get('/job-recommendations', (req: Request, res: Response) => {
 
   // Active or primary resume
   const activeResume = resumes.find((r) => r.isPrimary) || resumes[0];
+  const allJobs = db.getAllJobs().filter((j) => j.status === 'published');
 
-  // Extracted skills
-  const resumeSkills: string[] = activeResume?.extractedData?.skills || profile?.skills || [
-    'TypeScript',
-    'React',
-    'Node.js',
-    'PostgreSQL',
-    'REST APIs',
-    'Git',
-    'Python',
-  ];
+  // If no resume and no manually entered profile skills, return clean empty state
+  if (!activeResume && (!profile || !profile.skills || profile.skills.length === 0)) {
+    return res.json({
+      recommendations: [],
+      resumeUsed: null,
+      totalPublishedJobs: allJobs.length,
+      hasResume: false,
+    });
+  }
 
+  // Extracted skills strictly from actual resume or profile
+  const resumeSkills: string[] = activeResume?.extractedData?.skills || profile?.skills || [];
   const resumeExperience = activeResume?.extractedData?.experience || profile?.experience || [];
   const resumeEducation = activeResume?.extractedData?.education || profile?.education || [];
-
-  const allJobs = db.getAllJobs().filter((j) => j.status === 'published');
 
   const recommendations = allJobs.map((job) => {
     // 1. Skill overlap calculation
@@ -243,14 +256,23 @@ router.get('/job-recommendations', (req: Request, res: Response) => {
 
   return res.json({
     recommendations,
-    resumeUsed: {
-      id: activeResume?.id || 'profile-default',
-      filename: activeResume?.filename || 'Candidate Verified Profile',
-      atsScore: activeResume?.atsScore || 88,
-      skillsDetectedCount: resumeSkills.length,
-      sampleSkills: resumeSkills.slice(0, 8),
-    },
+    resumeUsed: activeResume
+      ? {
+          id: activeResume.id,
+          filename: activeResume.filename,
+          atsScore: activeResume.atsScore,
+          skillsDetectedCount: resumeSkills.length,
+          sampleSkills: resumeSkills.slice(0, 8),
+        }
+      : {
+          id: 'profile',
+          filename: 'Profile Competencies',
+          atsScore: 0,
+          skillsDetectedCount: resumeSkills.length,
+          sampleSkills: resumeSkills.slice(0, 8),
+        },
     totalPublishedJobs: allJobs.length,
+    hasResume: !!activeResume,
   });
 });
 

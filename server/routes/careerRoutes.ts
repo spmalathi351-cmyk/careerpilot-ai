@@ -18,29 +18,33 @@ router.get('/guidance', async (req: Request, res: Response) => {
     const resumes = db.getResumesByStudentId(userId);
     const primaryResume = resumes.find((r) => r.isPrimary) || resumes[0];
 
-    const currentSkills = profile?.skills || primaryResume?.extractedData?.skills || [
-      'TypeScript',
-      'React',
-      'Python',
-    ];
-    const targetRoles = profile?.targetRoles || ['Full-Stack Software Engineer'];
-    const education = profile?.education[0]?.field || 'Computer Science';
+    const currentSkills = profile?.skills?.length
+      ? profile.skills
+      : (primaryResume?.extractedData?.skills || []);
+    const targetRoles = profile?.targetRoles || [];
+    const education = profile?.education[0]?.field || '';
 
-    const recommendations = await generateCareerGuidance(currentSkills, education, targetRoles);
+    const hasResume = !!primaryResume;
+    const recommendations = (currentSkills.length > 0 || hasResume)
+      ? await generateCareerGuidance(currentSkills, education, targetRoles)
+      : [];
 
-    db.logAiUsage({
-      userId,
-      feature: 'Career Guidance Roles & Skill Gaps',
-      model: 'gemini-3.8-flash',
-      inputTokens: 800,
-      outputTokens: 600,
-      status: 'success',
-    });
+    if (recommendations.length > 0) {
+      db.logAiUsage({
+        userId,
+        feature: 'Career Guidance Roles & Skill Gaps',
+        model: 'gemini-3.8-flash',
+        inputTokens: 800,
+        outputTokens: 600,
+        status: 'success',
+      });
+    }
 
     return res.json({
       recommendations,
       currentSkills,
-      readinessScore: profile?.readinessScore || 85,
+      readinessScore: hasResume ? (profile?.readinessScore || 0) : 0,
+      hasResume,
       marketContext:
         'Estimates calibrated using industry engineering benchmarks (simulated reference dataset). No guarantees of employment are implied.',
     });
@@ -58,20 +62,26 @@ router.get('/roadmap', async (req: Request, res: Response) => {
 
     if (!roadmap) {
       const profile = db.getStudentProfileByUserId(userId);
-      const targetRole = profile?.targetRoles[0] || 'Full-Stack Software Engineer';
-      const skills = profile?.skills || ['React', 'TypeScript', 'Node.js'];
+      const resumes = db.getResumesByStudentId(userId);
+      const primaryResume = resumes.find((r) => r.isPrimary) || resumes[0];
+      const targetRole = profile?.targetRoles?.[0] || 'Software Engineer';
+      const skills = profile?.skills?.length ? profile.skills : (primaryResume?.extractedData?.skills || []);
 
-      roadmap = await generateCareerRoadmap(targetRole, skills);
-      db.setRoadmapForStudent(userId, roadmap);
+      if (skills.length > 0 || primaryResume) {
+        roadmap = await generateCareerRoadmap(targetRole, skills);
+        db.setRoadmapForStudent(userId, roadmap);
 
-      db.logAiUsage({
-        userId,
-        feature: 'Career Roadmap 30-60-90 Generation',
-        model: 'gemini-3.8-flash',
-        inputTokens: 950,
-        outputTokens: 750,
-        status: 'success',
-      });
+        db.logAiUsage({
+          userId,
+          feature: 'Career Roadmap 30-60-90 Generation',
+          model: 'gemini-3.8-flash',
+          inputTokens: 950,
+          outputTokens: 750,
+          status: 'success',
+        });
+      } else {
+        return res.json({ roadmap: [], hasResume: false });
+      }
     }
 
     return res.json({ roadmap });

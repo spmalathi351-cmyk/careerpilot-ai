@@ -122,12 +122,48 @@ CareerPilot Real-time Engine (TypeScript, Express, React, Tailwind, Gemini API)
 
     db.addResume(newResume);
 
-    // Sync student profile with newly extracted skills if empty
+    // Sync student profile dynamically with genuine extracted resume data
     const studentProfile = db.getStudentProfileByUserId(userId);
-    if (studentProfile && studentProfile.skills.length <= 3 && extracted.skills.length > 0) {
+    if (studentProfile) {
+      const mergedSkills = extracted.skills && extracted.skills.length > 0
+        ? Array.from(new Set([...studentProfile.skills, ...extracted.skills]))
+        : studentProfile.skills;
+
+      const updatedEducation = (studentProfile.education.length === 0 && extracted.education && extracted.education.length > 0)
+        ? extracted.education
+        : studentProfile.education;
+
+      const updatedExperience = (studentProfile.experience.length === 0 && extracted.experience && extracted.experience.length > 0)
+        ? extracted.experience
+        : studentProfile.experience;
+
+      const updatedProjects = (studentProfile.projects.length === 0 && extracted.projects && extracted.projects.length > 0)
+        ? extracted.projects
+        : studentProfile.projects;
+
+      const updatedCerts = (studentProfile.certifications.length === 0 && extracted.certifications && extracted.certifications.length > 0)
+        ? extracted.certifications
+        : studentProfile.certifications;
+
+      // Calculate profile completeness based on populated fields
+      let filled = 10;
+      if (extracted.headline || studentProfile.headline) filled += 15;
+      if (mergedSkills.length >= 3) filled += 20;
+      if (updatedEducation.length > 0) filled += 20;
+      if (updatedExperience.length > 0) filled += 15;
+      if (updatedProjects.length > 0) filled += 15;
+      if (updatedCerts.length > 0) filled += 5;
+
       db.createOrUpdateStudentProfile(userId, {
-        skills: Array.from(new Set([...studentProfile.skills, ...extracted.skills])),
-        headline: extracted.headline || studentProfile.headline,
+        skills: mergedSkills,
+        headline: extracted.headline || studentProfile.headline || 'Software Engineer',
+        education: updatedEducation,
+        experience: updatedExperience,
+        projects: updatedProjects,
+        certifications: updatedCerts,
+        atsAverage: overallScore,
+        readinessScore: Math.min(96, Math.max(65, Math.round(overallScore * 0.9 + (mergedSkills.length > 5 ? 8 : 0)))),
+        profileCompleteness: Math.min(100, filled),
       });
     }
 

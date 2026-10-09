@@ -36,8 +36,10 @@ router.post('/analyze', async (req: Request, res: Response) => {
       targetText = `${user.displayName || 'Candidate'} ${studentProfile?.headline || 'Software Engineer'} ${(studentProfile?.skills || []).join(' ')} ${studentProfile?.bio || ''}`.trim();
     }
 
-    if (!targetText) {
-      targetText = 'Software Engineer React TypeScript Node.js Python PostgreSQL Docker Git REST APIs';
+    if (!targetText || targetText.length < 10) {
+      return res.status(400).json({
+        error: 'No resume or profile content available. Upload your resume to unlock your ATS score and diagnostic analysis.',
+      });
     }
 
     const defaultJd =
