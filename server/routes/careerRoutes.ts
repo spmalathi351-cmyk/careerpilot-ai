@@ -25,7 +25,7 @@ router.get('/guidance', async (req: Request, res: Response) => {
     const education = profile?.education[0]?.field || '';
 
     const hasResume = !!primaryResume;
-    const recommendations = (currentSkills.length > 0 || hasResume)
+    const recommendations = (hasResume && currentSkills.length > 0)
       ? await generateCareerGuidance(currentSkills, education, targetRoles)
       : [];
 
@@ -42,11 +42,12 @@ router.get('/guidance', async (req: Request, res: Response) => {
 
     return res.json({
       recommendations,
-      currentSkills,
+      currentSkills: hasResume ? currentSkills : [],
       readinessScore: hasResume ? (profile?.readinessScore || 0) : 0,
       hasResume,
-      marketContext:
-        'Estimates calibrated using industry engineering benchmarks (simulated reference dataset). No guarantees of employment are implied.',
+      marketContext: hasResume
+        ? 'Estimates calibrated using industry engineering benchmarks (simulated reference dataset). No guarantees of employment are implied.'
+        : 'Upload your resume to unlock your ATS score, profile insights, and career recommendations.',
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Failed to fetch career guidance' });
@@ -58,16 +59,21 @@ router.get('/roadmap', async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     const userId = user.id;
+    const resumes = db.getResumesByStudentId(userId);
+    const primaryResume = resumes.find((r) => r.isPrimary) || resumes[0];
+
+    if (!primaryResume) {
+      return res.json({ roadmap: [], hasResume: false });
+    }
+
     let roadmap = db.getRoadmapByStudentId(userId);
 
     if (!roadmap) {
       const profile = db.getStudentProfileByUserId(userId);
-      const resumes = db.getResumesByStudentId(userId);
-      const primaryResume = resumes.find((r) => r.isPrimary) || resumes[0];
       const targetRole = profile?.targetRoles?.[0] || 'Software Engineer';
-      const skills = profile?.skills?.length ? profile.skills : (primaryResume?.extractedData?.skills || []);
+      const skills = profile?.skills?.length ? profile.skills : (primaryResume.extractedData?.skills || []);
 
-      if (skills.length > 0 || primaryResume) {
+      if (skills.length > 0) {
         roadmap = await generateCareerRoadmap(targetRole, skills);
         db.setRoadmapForStudent(userId, roadmap);
 
@@ -84,7 +90,7 @@ router.get('/roadmap', async (req: Request, res: Response) => {
       }
     }
 
-    return res.json({ roadmap });
+    return res.json({ roadmap, hasResume: true });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Failed to generate roadmap' });
   }
@@ -108,8 +114,14 @@ router.post('/generate-custom-roadmap', async (req: Request, res: Response) => {
     const userId = user.id;
     const { targetRole } = req.body;
     const profile = db.getStudentProfileByUserId(userId);
-    const skills = profile?.skills || ['TypeScript', 'React'];
+    const resumes = db.getResumesByStudentId(userId);
+    const primaryResume = resumes.find((r) => r.isPrimary) || resumes[0];
 
+    if (!primaryResume && (!profile?.skills || profile.skills.length === 0)) {
+      return res.status(400).json({ error: 'Upload your resume to unlock your ATS score, profile insights, and career recommendations.' });
+    }
+
+    const skills = profile?.skills?.length ? profile.skills : (primaryResume?.extractedData?.skills || []);
     const newRoadmap = await generateCareerRoadmap(targetRole || 'Full-Stack Software Engineer', skills);
     db.setRoadmapForStudent(userId, newRoadmap);
 

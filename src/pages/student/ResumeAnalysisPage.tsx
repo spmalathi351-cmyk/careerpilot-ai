@@ -26,6 +26,7 @@ import {
   Target,
   Sliders,
   TrendingUp,
+  FileText,
 } from 'lucide-react';
 
 interface BenchmarkProfile {

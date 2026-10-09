@@ -318,11 +318,59 @@ export const api = {
     return this.request<{
       targetRole: string;
       readinessScore: number;
+      hasResume: boolean;
       technicalQuestions: any[];
       behavioralQuestions: any[];
       pastSessions: InterviewSession[];
+      questionBankStats?: {
+        totalQuestions: number;
+        categories: string[];
+        skills: string[];
+      };
       suggestedPrepAreas: string[];
     }>('/api/interviews/prep');
+  },
+
+  getQuestionBank(filters?: {
+    role?: string;
+    skillOrTech?: string;
+    category?: string;
+    difficulty?: string;
+    search?: string;
+    personalized?: boolean;
+  }) {
+    const params = new URLSearchParams();
+    if (filters?.role) params.set('role', filters.role);
+    if (filters?.skillOrTech) params.set('skillOrTech', filters.skillOrTech);
+    if (filters?.category) params.set('category', filters.category);
+    if (filters?.difficulty) params.set('difficulty', filters.difficulty);
+    if (filters?.search) params.set('search', filters.search);
+    if (filters?.personalized) params.set('personalized', 'true');
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    return this.request<{
+      questions: any[];
+      total: number;
+      studentSkillsDetected: string[];
+      hasResume: boolean;
+    }>(`/api/interviews/question-bank${queryString}`);
+  },
+
+  practiceQuestionBank(data: {
+    questionId?: string;
+    questionText?: string;
+    studentAnswer: string;
+    role?: string;
+  }) {
+    return this.request<{
+      question: any;
+      evaluation: any;
+      sampleAnswer: string | null;
+      explanation: string | null;
+      keyEvaluationCriteria: string[];
+    }>('/api/interviews/question-bank/practice', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
   startMockInterview(data: { roleTitle?: string; type?: string; applicationId?: string }) {

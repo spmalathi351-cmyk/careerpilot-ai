@@ -108,7 +108,7 @@ export const StudentDashboard: React.FC = () => {
           subtitle={hasResume ? (primaryResume?.filename || 'Primary Resume Analyzed') : 'Upload resume to calculate'}
           icon={Target}
           trend={hasResume && atsScore !== null ? { value: `Score: ${atsScore}/100`, positive: atsScore >= 80 } : undefined}
-          accentColor={hasResume ? 'emerald' : 'slate'}
+          accentColor={hasResume ? 'emerald' : undefined}
           onClick={() => navigate(hasResume ? '/student/ats-simulator' : '/student/resumes/upload')}
         />
 
@@ -117,7 +117,7 @@ export const StudentDashboard: React.FC = () => {
           value={hasResume ? `${readiness}/100` : 'Not Available'}
           subtitle={hasResume ? 'Profile & Resume Analyzed' : 'Upload resume to calculate'}
           icon={TrendingUp}
-          accentColor={hasResume ? 'indigo' : 'slate'}
+          accentColor={hasResume ? 'indigo' : undefined}
           onClick={() => navigate(hasResume ? '/student/career-guidance' : '/student/resumes/upload')}
         />
 
@@ -318,61 +318,86 @@ export const StudentDashboard: React.FC = () => {
               </Link>
             </div>
 
-            <div className="divide-y divide-slate-100">
-              {(data?.recentApplications || []).map((app: any) => (
-                <div
-                  key={app.id}
-                  onClick={() => navigate(`/student/applications/${app.id}`)}
-                  className="py-3 flex items-center justify-between hover:bg-slate-50 -mx-2 px-2 rounded-xl cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={app.companyLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=150'}
-                      alt={app.companyName}
-                      className="w-10 h-10 rounded-xl object-cover border border-slate-200"
-                    />
-                    <div>
-                      <p className="text-xs font-bold text-slate-900">{app.jobTitle}</p>
-                      <p className="text-[11px] text-slate-500">{app.companyName} · {app.jobLocation}</p>
+            {data?.recentApplications && data.recentApplications.length > 0 ? (
+              <div className="divide-y divide-slate-100">
+                {data.recentApplications.map((app: any) => (
+                  <div
+                    key={app.id}
+                    onClick={() => navigate(`/student/applications/${app.id}`)}
+                    className="py-3 flex items-center justify-between hover:bg-slate-50 -mx-2 px-2 rounded-xl cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={app.companyLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=150'}
+                        alt={app.companyName}
+                        className="w-10 h-10 rounded-xl object-cover border border-slate-200"
+                      />
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">{app.jobTitle}</p>
+                        <p className="text-[11px] text-slate-500">{app.companyName} · {app.jobLocation}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <StatusBadge status={app.stage} size="sm" />
+                      <ChevronRight className="w-4 h-4 text-slate-400" />
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-3">
-                    <StatusBadge status={app.stage} size="sm" />
-                    <ChevronRight className="w-4 h-4 text-slate-400" />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-8 text-center text-xs text-slate-400">
+                No active applications submitted yet. Browse jobs and apply with your resume.
+              </div>
+            )}
           </div>
         </div>
 
         {/* Right Column: AI Recommendations & Upcoming Interviews */}
         <div className="space-y-6">
           {/* Upcoming Interview Card */}
-          <div className="bg-indigo-900 text-white rounded-2xl p-5 shadow-xs border border-indigo-800">
-            <div className="flex items-center gap-2 mb-3 text-indigo-300 text-xs font-bold uppercase tracking-wider">
-              <Calendar className="w-4 h-4" />
-              Next Scheduled Round
-            </div>
-            <p className="text-base font-bold">Technical Interview Panel</p>
-            <p className="text-xs text-indigo-200 mt-0.5">CareerPilot Demo Technologies</p>
-
-            <div className="mt-4 p-3 bg-indigo-950/60 rounded-xl border border-indigo-700/50 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2 text-indigo-200">
-                <Clock className="w-4 h-4 text-indigo-400" />
-                <span>Oct 10, 2026 · 3:00 PM PST</span>
+          {data?.upcomingInterviews && data.upcomingInterviews.length > 0 ? (
+            <div className="bg-indigo-900 text-white rounded-2xl p-5 shadow-xs border border-indigo-800">
+              <div className="flex items-center gap-2 mb-3 text-indigo-300 text-xs font-bold uppercase tracking-wider">
+                <Calendar className="w-4 h-4" />
+                Next Scheduled Round
               </div>
-              <span className="font-semibold text-emerald-400">Confirmed</span>
-            </div>
+              <p className="text-base font-bold">{data.upcomingInterviews[0].jobTitle}</p>
+              <p className="text-xs text-indigo-200 mt-0.5">{data.upcomingInterviews[0].companyName}</p>
 
-            <Link
-              to="/student/interview-prep"
-              className="mt-4 w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-            >
-              Start Prep Mode <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
+              <div className="mt-4 p-3 bg-indigo-950/60 rounded-xl border border-indigo-700/50 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-indigo-200">
+                  <Clock className="w-4 h-4 text-indigo-400" />
+                  <span>{new Date(data.upcomingInterviews[0].interviewScheduled).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </div>
+                <span className="font-semibold text-emerald-400">Scheduled</span>
+              </div>
+
+              <Link
+                to="/student/interview-prep"
+                className="mt-4 w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+              >
+                Start Prep Mode <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          ) : (
+            <div className="bg-indigo-950/80 text-white rounded-2xl p-5 shadow-xs border border-indigo-900/60 space-y-3">
+              <div className="flex items-center gap-2 text-indigo-300 text-xs font-bold uppercase tracking-wider">
+                <Calendar className="w-4 h-4" />
+                Interview Preparation
+              </div>
+              <p className="text-sm font-bold text-slate-100">No scheduled interviews yet</p>
+              <p className="text-xs text-indigo-200/90 leading-relaxed">
+                Sharpen your behavioral and technical articulation with our real-time mock interview simulator.
+              </p>
+              <Link
+                to="/student/interview-prep"
+                className="inline-flex w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold items-center justify-center gap-1.5 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Practice Mock Interview
+              </Link>
+            </div>
+          )}
 
           {/* Recommended Career Roles */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
@@ -383,33 +408,47 @@ export const StudentDashboard: React.FC = () => {
               </Link>
             </div>
 
-            <div className="space-y-3">
-              {recommendedRoles.slice(0, 3).map((roleItem: any) => (
-                <div
-                  key={roleItem.roleId}
-                  onClick={() => navigate('/student/career-guidance')}
-                  className="p-3 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200/70 rounded-xl cursor-pointer transition-colors"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-slate-900">{roleItem.roleTitle}</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">{roleItem.averageSalary}</p>
-                    </div>
-                    <span className="text-xs font-extrabold text-indigo-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs">
-                      {roleItem.fitPercentage}% Fit
-                    </span>
-                  </div>
-
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {roleItem.requiredSkills.slice(0, 3).map((sk: string) => (
-                      <span key={sk} className="text-[10px] text-slate-600 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                        {sk}
+            {recommendedRoles.length > 0 ? (
+              <div className="space-y-3">
+                {recommendedRoles.slice(0, 3).map((roleItem: any) => (
+                  <div
+                    key={roleItem.roleId}
+                    onClick={() => navigate('/student/career-guidance')}
+                    className="p-3 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200/70 rounded-xl cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">{roleItem.roleTitle}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{roleItem.averageSalary}</p>
+                      </div>
+                      <span className="text-xs font-extrabold text-indigo-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs">
+                        {roleItem.fitPercentage}% Fit
                       </span>
-                    ))}
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {roleItem.requiredSkills.slice(0, 3).map((sk: string) => (
+                        <span key={sk} className="text-[10px] text-slate-600 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                          {sk}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-6 px-4 text-center space-y-3 bg-slate-50 rounded-xl border border-slate-100">
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Upload your resume to unlock your ATS score, profile insights, and career recommendations.
+                </p>
+                <Link
+                  to="/student/resumes/upload"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors"
+                >
+                  <FileText className="w-3.5 h-3.5" /> Upload Resume
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>

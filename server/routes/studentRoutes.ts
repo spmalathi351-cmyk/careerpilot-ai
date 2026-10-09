@@ -91,12 +91,12 @@ router.get('/dashboard', async (req: Request, res: Response) => {
 
   const hasResume = !!primaryResume;
 
-  // Recommended roles only if student has actual resume or profile skills
+  // Recommended roles only if student has actual uploaded resume
   let recommendations: any[] = [];
-  if (hasResume || (profile.skills && profile.skills.length > 0)) {
+  if (hasResume && profile.skills && profile.skills.length > 0) {
     recommendations = await generateCareerGuidance(
       profile.skills,
-      profile.education[0]?.field || 'Computer Science',
+      profile.education[0]?.field || '',
       profile.targetRoles
     );
   }
@@ -158,8 +158,8 @@ router.get('/job-recommendations', (req: Request, res: Response) => {
   const activeResume = resumes.find((r) => r.isPrimary) || resumes[0];
   const allJobs = db.getAllJobs().filter((j) => j.status === 'published');
 
-  // If no resume and no manually entered profile skills, return clean empty state
-  if (!activeResume && (!profile || !profile.skills || profile.skills.length === 0)) {
+  // If no resume uploaded yet, return clean empty state
+  if (!activeResume || !activeResume.extractedData?.skills || activeResume.extractedData.skills.length === 0) {
     return res.json({
       recommendations: [],
       resumeUsed: null,

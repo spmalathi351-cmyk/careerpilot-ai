@@ -60,11 +60,11 @@ export const StudentProfilePage: React.FC = () => {
 
           <div className="space-y-1 max-w-xl">
             <h1 className="text-2xl font-extrabold text-slate-900">{user?.displayName || 'Candidate'}</h1>
-            <p className="text-sm font-semibold text-indigo-600">{profile?.headline}</p>
+            <p className="text-sm font-semibold text-indigo-600">{profile?.headline || 'Candidate'}</p>
 
             <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-2">
               <span className="flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-slate-400" /> {profile?.location || 'San Francisco, CA'}
+                <MapPin className="w-3.5 h-3.5 text-slate-400" /> {profile?.location || 'Not specified'}
               </span>
               <span className="flex items-center gap-1">
                 <Mail className="w-3.5 h-3.5 text-slate-400" /> {user?.email}

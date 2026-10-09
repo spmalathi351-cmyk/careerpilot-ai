@@ -72,21 +72,10 @@ router.post('/register/student', (req: Request, res: Response) => {
       password
     );
 
-    // Bootstrap initial student profile with genuine user data (zero fake skills or demo data)
+    // Bootstrap initial student profile strictly empty for first-time user (zero resume-derived data)
     db.createOrUpdateStudentProfile(newUser.id, {
-      headline: college ? `Student @ ${college}` : 'Candidate',
-      education: college
-        ? [
-            {
-              id: `edu-${Date.now()}`,
-              institution: college,
-              degree: degree || 'Bachelor of Science',
-              field: department || 'Computer Science',
-              startYear: (parseInt(graduationYear || '2026') - 4).toString(),
-              endYear: graduationYear || '2026',
-            },
-          ]
-        : [],
+      headline: '',
+      education: [],
       skills: [],
       experience: [],
       projects: [],
@@ -94,7 +83,7 @@ router.post('/register/student', (req: Request, res: Response) => {
       targetRoles: [],
       readinessScore: 0,
       atsAverage: 0,
-      profileCompleteness: 15,
+      profileCompleteness: 0,
     });
 
     return res.status(201).json({

@@ -353,3 +353,20 @@ export interface CareerRoadmapMilestone {
   completed: boolean;
   completedAt?: string;
 }
+
+export type InterviewCategory = 'HR' | 'Technical' | 'Behavioral' | 'Project-Based' | 'Scenario-Based';
+export type InterviewDifficulty = 'Beginner' | 'Intermediate' | 'Advanced';
+
+export interface InterviewQuestionBankItem {
+  id: string;
+  category: InterviewCategory;
+  skillOrTech: string;
+  jobRoles: string[];
+  difficulty: InterviewDifficulty;
+  question: string;
+  hint: string;
+  sampleAnswer: string;
+  explanation: string;
+  keyEvaluationCriteria: string[];
+  isPredefined: boolean;
+}

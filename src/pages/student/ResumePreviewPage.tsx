@@ -155,7 +155,7 @@ export const ResumePreviewPage: React.FC = () => {
   const handleCopyPlainText = () => {
     if (!resume) return;
     const d = resume.extractedData;
-    let plain = `${d.name?.toUpperCase()}\n${d.headline}\nEmail: ${d.email} | Phone: ${d.phone} | San Francisco, CA\n\n`;
+    let plain = `${d.name?.toUpperCase() || 'CANDIDATE'}\n${d.headline || ''}\nEmail: ${d.email || ''}${d.phone ? ` | Phone: ${d.phone}` : ''}\n\n`;
 
     if (showSummary && d.summary) {
       plain += `PROFESSIONAL SUMMARY\n${d.summary}\n\n`;
@@ -199,7 +199,25 @@ export const ResumePreviewPage: React.FC = () => {
   }
 
   if (!resume) {
-    return <div className="p-8 text-center text-xs text-red-500">Resume record not found</div>;
+    return (
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-10 shadow-xs text-center space-y-4 max-w-2xl mx-auto my-8">
+        <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto">
+          <FileCheck className="w-7 h-7" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">No Resume Available</h2>
+          <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+            Upload your resume to unlock your ATS score, profile insights, and career recommendations.
+          </p>
+        </div>
+        <Link
+          to="/student/resumes/upload"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+        >
+          <Sparkles className="w-4 h-4" /> Upload Resume
+        </Link>
+      </div>
+    );
   }
 
   const d = resume.extractedData;

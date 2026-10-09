@@ -24,6 +24,7 @@ router.get('/prep', async (req: Request, res: Response) => {
 
     const resumes = db.getResumesByStudentId(userId);
     const hasResume = resumes.length > 0;
+    const allBankQuestions = db.getQuestionBank();
 
     return res.json({
       targetRole,
@@ -32,6 +33,11 @@ router.get('/prep', async (req: Request, res: Response) => {
       technicalQuestions,
       behavioralQuestions,
       pastSessions,
+      questionBankStats: {
+        totalQuestions: allBankQuestions.length,
+        categories: Array.from(new Set(allBankQuestions.map((q) => q.category))),
+        skills: Array.from(new Set(allBankQuestions.map((q) => q.skillOrTech))),
+      },
       suggestedPrepAreas: [
         'Practice STAR method with quantifiable business impact numbers',
         'Review database indexing fundamentals and caching invalidation patterns',
@@ -41,6 +47,99 @@ router.get('/prep', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Prep data fetch failed' });
+  }
+});
+
+// Structured Question Bank: Search, Filter, Personalize by Resume
+router.get('/question-bank', (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const userId = user.id;
+    const { role, skillOrTech, category, difficulty, search, personalized } = req.query;
+
+    let questions = db.getQuestionBank({
+      role: role as string,
+      skillOrTech: skillOrTech as string,
+      category: category as string,
+      difficulty: difficulty as string,
+      search: search as string,
+    });
+
+    const resumes = db.getResumesByStudentId(userId);
+    const primaryResume = resumes.find((r) => r.isPrimary) || resumes[0];
+    const profile = db.getStudentProfileByUserId(userId);
+    const studentSkills = (primaryResume?.extractedData?.skills || profile?.skills || []).map((s) =>
+      s.toLowerCase()
+    );
+
+    // Annotate whether question matches the student's actual resume competencies
+    const enriched = questions.map((q) => {
+      const isSkillMatch = studentSkills.some(
+        (sk) => q.skillOrTech.toLowerCase().includes(sk) || sk.includes(q.skillOrTech.toLowerCase())
+      );
+      return {
+        ...q,
+        isResumeSkillMatch: isSkillMatch,
+      };
+    });
+
+    if (personalized === 'true' && studentSkills.length > 0) {
+      // Prioritize questions matching student's verified resume skills
+      enriched.sort((a, b) => {
+        if (a.isResumeSkillMatch && !b.isResumeSkillMatch) return -1;
+        if (!a.isResumeSkillMatch && b.isResumeSkillMatch) return 1;
+        return 0;
+      });
+    }
+
+    return res.json({
+      questions: enriched,
+      total: enriched.length,
+      studentSkillsDetected: studentSkills,
+      hasResume: resumes.length > 0,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to fetch question bank' });
+  }
+});
+
+// Practice Question Bank Item: Submit answer and receive AI evaluation + sample answer
+router.post('/question-bank/practice', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { questionId, studentAnswer, role } = req.body;
+
+    if (!studentAnswer || studentAnswer.trim().length === 0) {
+      return res.status(400).json({ error: 'Please provide your answer before submitting.' });
+    }
+
+    const questionItem = questionId ? db.getQuestionById(questionId) : undefined;
+    const questionText = questionItem?.question || req.body.questionText || 'Technical Interview Question';
+
+    const evaluation = await evaluateInterviewAnswer(
+      questionText,
+      studentAnswer,
+      role || 'Software Engineer'
+    );
+
+    db.logAiUsage({
+      userId: user.id,
+      feature: 'Question Bank Answer Practice Evaluation',
+      model: 'gemini-3.8-flash',
+      inputTokens: 620,
+      outputTokens: 380,
+      status: 'success',
+    });
+
+    return res.json({
+      question: questionItem || null,
+      evaluation,
+      sampleAnswer: questionItem?.sampleAnswer || null,
+      explanation: questionItem?.explanation || null,
+      keyEvaluationCriteria: questionItem?.keyEvaluationCriteria || [],
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Practice answer evaluation failed' });
   }
 });
 

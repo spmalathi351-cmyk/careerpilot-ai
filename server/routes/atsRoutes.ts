@@ -31,14 +31,20 @@ router.post('/analyze', async (req: Request, res: Response) => {
     }
 
     if (!targetText) {
-      // Build text from student profile or default placeholder
-      const studentProfile = db.getStudentProfileByUserId(user.id);
-      targetText = `${user.displayName || 'Candidate'} ${studentProfile?.headline || 'Software Engineer'} ${(studentProfile?.skills || []).join(' ')} ${studentProfile?.bio || ''}`.trim();
+      const studentResumes = db.getResumesByStudentId(user.id);
+      const primaryResume = studentResumes.find((r) => r.isPrimary) || studentResumes[0];
+      if (primaryResume) {
+        targetText =
+          primaryResume.rawText ||
+          `${primaryResume.extractedData?.name || ''} ${primaryResume.extractedData?.headline || ''} ${(primaryResume.extractedData?.skills || []).join(
+            ', '
+          )} ${primaryResume.extractedData?.summary || ''}`.trim();
+      }
     }
 
     if (!targetText || targetText.length < 10) {
       return res.status(400).json({
-        error: 'No resume or profile content available. Upload your resume to unlock your ATS score and diagnostic analysis.',
+        error: 'Upload your resume to unlock your ATS score, profile insights, and career recommendations.',
       });
     }
 
@@ -120,13 +126,12 @@ router.get('/inspector/:id', (req: Request, res: Response) => {
   const sampleLines = lines.length
     ? lines
     : [
-        `${resume.extractedData.name || user.displayName || 'Candidate'} | ${user.email}`,
-        resume.extractedData.headline || 'Full-Stack Software Engineer',
-        `Skills: ${resume.extractedData.skills.join(', ')}`,
-        'Nexus Software Labs - Software Engineering Intern',
-        'Spearheaded development of high-throughput REST API servicing 45,000 daily requests',
-        'Optimized PostgreSQL queries decreasing latency by 32%',
-      ];
+        `${resume.extractedData?.name || user.displayName || 'Candidate'} | ${user.email}`,
+        resume.extractedData?.headline || '',
+        `Skills: ${(resume.extractedData?.skills || []).join(', ')}`,
+        ...(resume.extractedData?.experience || []).map((e: any) => `${e.company} - ${e.role}`),
+        ...(resume.extractedData?.projects || []).map((p: any) => `${p.title}: ${p.description}`),
+      ].filter(Boolean);
 
   return res.json({
     resume,

@@ -59,24 +59,26 @@ router.post('/upload', async (req: Request, res: Response) => {
     const isFirst = existingResumes.length === 0;
 
     const resumeId = `res-${Date.now()}`;
-    const sampleText =
+    const resumeTextToParse =
       rawText ||
-      `${user.displayName || 'Candidate'} | ${user.email} | (555) 234-5678
-Full-Stack Software Engineer & Applied AI Enthusiast
-Education: California Institute of Technology - B.S. in Computer Science (GPA 3.89)
-Skills: TypeScript, React, Node.js, Python, PostgreSQL, Docker, Tailwind CSS, REST APIs, Git, Machine Learning.
-Experience:
-Nexus Software Labs - Software Engineering Intern
-- Spearheaded development of high-throughput REST API servicing 45,000 daily active requests.
-- Optimized PostgreSQL queries decreasing 95th-percentile response latency by 32%.
-Projects:
-CareerPilot Real-time Engine (TypeScript, Express, React, Tailwind, Gemini API)
-- Cut mock interview evaluation latency to under 250ms with instant structured feedback.`;
+      fileContent ||
+      `${user.displayName || 'Candidate'}\n${user.email || ''}\nResume: ${filename}`;
 
     // Perform AI extraction
-    const { extracted, source } = await parseResumeWithAI(sampleText, filename);
+    const { extracted, source } = await parseResumeWithAI(resumeTextToParse, filename);
 
-    const overallScore = Math.floor(84 + Math.random() * 9);
+    // Calculate ATS score from actual extracted resume competencies
+    const detectedSkillCount = extracted.skills?.length || 0;
+    const hasEducation = (extracted.education?.length || 0) > 0;
+    const hasExperience = (extracted.experience?.length || 0) > 0;
+    const hasProjects = (extracted.projects?.length || 0) > 0;
+
+    let calculatedAts = 45;
+    calculatedAts += Math.min(30, detectedSkillCount * 5);
+    if (hasEducation) calculatedAts += 9;
+    if (hasExperience) calculatedAts += 8;
+    if (hasProjects) calculatedAts += 6;
+    const overallScore = Math.min(96, Math.max(40, calculatedAts));
 
     const newResume: Resume = {
       id: resumeId,
@@ -90,32 +92,31 @@ CareerPilot Real-time Engine (TypeScript, Express, React, Tailwind, Gemini API)
       extractedData: extracted,
       scores: {
         overall: overallScore,
-        keywordMatch: overallScore + 2,
-        skillsMatch: overallScore - 1,
-        formattingScore: 94,
-        experienceRelevance: 87,
-        educationRelevance: 91,
+        keywordMatch: Math.min(96, overallScore + 2),
+        skillsMatch: Math.max(40, overallScore - 1),
+        formattingScore: 92,
+        experienceRelevance: hasExperience ? 88 : 60,
+        educationRelevance: hasEducation ? 90 : 65,
       },
       recommendations: {
         resumeImprovements: [
           'Add quantitative benchmarks to project statements (e.g. latency cut, query time reduced).',
-          'Highlight modern distributed caching (Redis) or message queues to stand out to senior recruiters.',
           'Include links to hosted GitHub demos or live staging deployments.',
         ],
         missingSkills: ['Redis', 'Kubernetes', 'CI/CD Pipelines', 'GraphQL'],
         suggestedProjects: [
           {
-            title: 'High-Availability Event Streaming Service',
-            description: 'Implement distributed event ingestion with Redis Streams and Dockerized workers.',
-            techStack: ['TypeScript', 'Redis', 'Docker'],
+            title: 'High-Availability Distributed Service',
+            description: 'Implement distributed event ingestion and caching mechanism.',
+            techStack: extracted.skills.slice(0, 3),
             careerImpact: 'Differentiates candidate from typical junior applicants.',
           },
         ],
-        strengths: extracted.strengths || ['Strong technical vocabulary', 'Well formatted education details'],
+        strengths: extracted.strengths || ['Demonstrated relevant technical competencies'],
         weaknesses: extracted.weaknesses || ['Could feature more commercial cloud deployment details'],
-        careerReadinessSuggestions: ['Ready for Full-Stack and Backend Engineering technical screens.'],
+        careerReadinessSuggestions: ['Ready for technical phone screens and foundational software engineering rounds.'],
       },
-      rawText: sampleText,
+      rawText: resumeTextToParse,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

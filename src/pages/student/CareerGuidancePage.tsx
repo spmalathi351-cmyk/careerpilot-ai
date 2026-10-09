@@ -17,7 +17,7 @@ import {
 export const CareerGuidancePage: React.FC = () => {
   const [recommendations, setRecommendations] = useState<CareerRoleRecommendation[]>([]);
   const [currentSkills, setCurrentSkills] = useState<string[]>([]);
-  const [readinessScore, setReadinessScore] = useState(85);
+  const [readinessScore, setReadinessScore] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 

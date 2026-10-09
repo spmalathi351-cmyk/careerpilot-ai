@@ -36,23 +36,16 @@ export const ResumeRecommendationsPage: React.FC = () => {
     return <div className="p-8 text-center text-xs text-red-500">Resume not found</div>;
   }
 
-  const rec = resume.recommendations || {
-    resumeImprovements: [
-      'Incorporate more quantitative benchmarks in project descriptions.',
-      'Highlight modern distributed caching (Redis) or message queues.',
+  const rec = {
+    resumeImprovements: resume.recommendations?.resumeImprovements || [
+      'Add quantitative metrics to your project statements.',
+      'Ensure clear technology labels in each project description.',
     ],
-    missingSkills: ['Redis', 'Docker', 'Kubernetes', 'CI/CD Pipelines'],
-    suggestedProjects: [
-      {
-        title: 'Distributed Event Queue & Cache Proxy',
-        description: 'Design and deploy an asynchronous job queuing mechanism with Redis Streams.',
-        techStack: ['TypeScript', 'Node.js', 'Redis', 'Docker'],
-        careerImpact: 'Demonstrates deep backend scaling competence valued by tier-1 tech firms.',
-      },
-    ],
-    strengths: ['High technical keyword density', 'Well-structured education and internship metrics'],
-    weaknesses: ['Limited mention of automated testing pipelines'],
-    careerReadinessSuggestions: ['Ready for Mid-Level Full-Stack software engineering rounds.'],
+    missingSkills: resume.recommendations?.missingSkills || [],
+    suggestedProjects: resume.recommendations?.suggestedProjects || [],
+    strengths: resume.recommendations?.strengths || [],
+    weaknesses: resume.recommendations?.weaknesses || [],
+    careerReadinessSuggestions: resume.recommendations?.careerReadinessSuggestions || [],
   };
 
   return (
