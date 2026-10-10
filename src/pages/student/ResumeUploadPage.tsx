@@ -88,26 +88,24 @@ export const ResumeUploadPage: React.FC = () => {
     setError(null);
 
     const filename = file ? file.name : 'Candidate_Resume_Draft.pdf';
-    const fileSize = file ? file.size : 165000;
-
-    let fileTextToSubmit: string | undefined = useCustomText ? customText : undefined;
-    if (file && !useCustomText) {
-      try {
-        const readText = await file.text();
-        if (readText && readText.trim().length > 10) {
-          fileTextToSubmit = readText;
-        }
-      } catch {
-        // Non-plaintext binary
-      }
-    }
 
     try {
-      const res = await api.uploadResume({
-        filename,
-        fileSize,
-        rawText: fileTextToSubmit,
-      });
+      let res;
+      if (file && !useCustomText) {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (existingResumes.length > 0) {
+          formData.append('replace', 'true');
+        }
+        res = await api.uploadResume(formData);
+      } else {
+        res = await api.uploadResume({
+          filename,
+          fileSize: customText.length,
+          rawText: customText,
+          replace: existingResumes.length > 0,
+        });
+      }
 
       showToast(`Resume "${filename}" uploaded and parsed!`, 'success');
       navigate(`/student/resumes/processing/${res.resume.id}`);

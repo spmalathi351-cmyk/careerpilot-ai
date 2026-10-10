@@ -1596,7 +1596,13 @@ class InMemoryDatabase {
     return this.questionBank.get(id);
   }
 
+  getUserById(id: string): User | undefined {
+    if (!id) return undefined;
+    return this.users.get(id);
+  }
+
   getUserByEmail(email: string): User | undefined {
+    if (!email) return undefined;
     const target = email.toLowerCase().trim();
     for (const user of this.users.values()) {
       if (user.email.toLowerCase() === target) {

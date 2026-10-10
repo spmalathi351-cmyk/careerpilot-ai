@@ -17,65 +17,99 @@ export function getAuthenticatedUserId(req: Request): string | null {
 
 // Middleware: Require valid authenticated user
 export function requireAuth(req: Request, res: Response, next: () => void) {
-  const userId = getAuthenticatedUserId(req);
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized: Authentication required' });
+  try {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: Authentication required' });
+    }
+    const user = db.getUserById(userId);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid or expired session' });
+    }
+    (req as any).user = user;
+    (req as any).userId = user.id;
+    next();
+  } catch (err: any) {
+    return res.status(401).json({ error: 'Unauthorized: Authentication failed' });
   }
-  const user = db.getUserById(userId);
-  if (!user) {
-    return res.status(401).json({ error: 'Unauthorized: Invalid or expired session' });
-  }
-  (req as any).user = user;
-  (req as any).userId = user.id;
-  next();
 }
 
 // Middleware: Require specific user role(s)
 export function requireRole(allowedRoles: string[]) {
   return (req: Request, res: Response, next: () => void) => {
-    const user = (req as any).user || db.getUserById(getAuthenticatedUserId(req) || '');
-    if (!user) {
+    try {
+      const user = (req as any).user || db.getUserById(getAuthenticatedUserId(req) || '');
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized: Authentication required' });
+      }
+      (req as any).user = user;
+      (req as any).userId = user.id;
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({
+          error: `Forbidden: Access requires one of [${allowedRoles.join(', ')}] role`,
+        });
+      }
+      next();
+    } catch {
       return res.status(401).json({ error: 'Unauthorized: Authentication required' });
     }
-    (req as any).user = user;
-    (req as any).userId = user.id;
-    if (!allowedRoles.includes(user.role)) {
-      return res.status(403).json({
-        error: `Forbidden: Access requires one of [${allowedRoles.join(', ')}] role`,
-      });
-    }
-    next();
   };
 }
 
 // Student Registration
 router.post('/register/student', (req: Request, res: Response) => {
   try {
-    const { email, password, fullName, college, degree, department, graduationYear } = req.body;
+    const { email, password, fullName, college, degree, department, graduationYear, phone } = req.body;
 
-    if (!email || !password || !fullName) {
-      return res.status(400).json({ error: 'Full name, email, and password are required.' });
+    if (!email || typeof email !== 'string' || !email.trim()) {
+      return res.status(400).json({ error: 'A valid email address is required.' });
+    }
+    if (!password || typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({ error: 'Password must contain at least 6 characters.' });
+    }
+    if (!fullName || typeof fullName !== 'string' || !fullName.trim()) {
+      return res.status(400).json({ error: 'Full name is required.' });
     }
 
-    const existing = db.getUserByEmail(email);
+    const cleanEmail = email.toLowerCase().trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email format (e.g. name@example.com).' });
+    }
+
+    const existing = db.getUserByEmail(cleanEmail);
     if (existing) {
       return res.status(409).json({ error: 'An account with this email address already exists.' });
     }
 
     const newUser = db.createUser(
       {
-        email,
+        email: cleanEmail,
         role: 'student',
-        displayName: fullName,
+        displayName: fullName.trim(),
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
       },
       password
     );
 
-    // Bootstrap initial student profile strictly empty for first-time user (zero resume-derived data)
+    const initialEducation = college && typeof college === 'string' && college.trim()
+      ? [
+          {
+            id: `edu-${Date.now()}`,
+            institution: college.trim(),
+            degree: (degree && typeof degree === 'string' && degree.trim()) || 'Bachelor of Science',
+            field: (department && typeof department === 'string' && department.trim()) || 'Computer Science',
+            startYear: graduationYear ? String(Math.max(2000, parseInt(graduationYear) - 4)) : '2022',
+            endYear: (graduationYear && typeof graduationYear === 'string' && graduationYear.trim()) || '2026',
+          },
+        ]
+      : [];
+
+    // Bootstrap initial student profile strictly empty of resume-derived items
     db.createOrUpdateStudentProfile(newUser.id, {
       headline: '',
-      education: [],
+      phone: (phone && typeof phone === 'string' && phone.trim()) || '',
+      education: initialEducation,
       skills: [],
       experience: [],
       projects: [],
@@ -83,7 +117,7 @@ router.post('/register/student', (req: Request, res: Response) => {
       targetRoles: [],
       readinessScore: 0,
       atsAverage: 0,
-      profileCompleteness: 0,
+      profileCompleteness: initialEducation.length > 0 ? 15 : 0,
     });
 
     return res.status(201).json({

@@ -1,10 +1,53 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import multer from 'multer';
+import path from 'path';
 import { db } from '../db/database.js';
 import { requireAuth } from './authRoutes.js';
 import { parseResumeWithAI, polishTextWithAI } from '../ai/geminiService.js';
 import { Resume } from '../types.js';
+import {
+  validateResumeFile,
+  extractTextFromFileBuffer,
+  MAX_RESUME_SIZE,
+} from '../utils/resumeParser.js';
 
 const router = Router();
+
+// Configure multer memory storage
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_RESUME_SIZE,
+  },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext === '.pdf' || ext === '.docx' || ext === '.txt') {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file format. Please upload a PDF or DOCX file (up to 15MB).'));
+    }
+  },
+});
+
+// Middleware to handle both multipart/form-data and application/json requests
+const flexibleUpload = (req: Request, res: Response, next: NextFunction) => {
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.includes('multipart/form-data')) {
+    upload.any()(req, res, (err: any) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({
+            error: 'File size exceeds the 15 MB limit. Please upload a smaller file.',
+          });
+        }
+        return res.status(400).json({ error: err.message || 'File upload error.' });
+      }
+      next();
+    });
+  } else {
+    next();
+  }
+};
 
 // Apply requireAuth to all resume operations
 router.use(requireAuth);
@@ -44,30 +87,83 @@ router.get('/:id', (req: Request, res: Response) => {
   return res.json({ resume });
 });
 
-// Upload Resume
-router.post('/upload', async (req: Request, res: Response) => {
+// Upload / Replace Resume
+router.post('/upload', flexibleUpload, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     const userId = user.id;
-    const { filename, fileSize, fileContent, rawText } = req.body;
+
+    // Detect file from multipart or JSON payload
+    const uploadedFile = (req.files && (req.files as Express.Multer.File[])[0]) || (req as any).file;
+    let filename = uploadedFile?.originalname || req.body?.filename;
+    let fileSize = uploadedFile?.size || Number(req.body?.fileSize) || 0;
+    let buffer: Buffer | null = uploadedFile?.buffer || null;
+
+    // Handle base64 payload if sent via JSON
+    if (!buffer && req.body?.fileBase64) {
+      buffer = Buffer.from(req.body.fileBase64, 'base64');
+      fileSize = buffer.length;
+    }
+
+    // Handle binary string sent in rawText or fileContent
+    const incomingRaw = req.body?.rawText || req.body?.fileContent;
+    if (!buffer && incomingRaw && typeof incomingRaw === 'string') {
+      const isZipHeader = incomingRaw.startsWith('PK\x03\x04');
+      const isPdfHeader = incomingRaw.startsWith('%PDF');
+      if (isZipHeader || isPdfHeader) {
+        buffer = Buffer.from(incomingRaw, 'binary');
+        fileSize = buffer.length;
+      }
+    }
+
+    if (!filename && buffer) {
+      filename = 'Uploaded_Resume.docx';
+    }
 
     if (!filename) {
-      return res.status(400).json({ error: 'File name is required' });
+      return res.status(400).json({ error: 'File name is required. Please select a resume file.' });
+    }
+
+    // Validate file type and size
+    const validation = validateResumeFile(filename, fileSize, buffer || undefined);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    // Extract text from buffer or use provided plain text
+    let resumeText = '';
+    if (buffer) {
+      resumeText = await extractTextFromFileBuffer(buffer, filename);
+    } else if (incomingRaw && typeof incomingRaw === 'string') {
+      resumeText = incomingRaw.trim();
+    }
+
+    // If text could not be extracted
+    if (!resumeText || resumeText.length < 5) {
+      return res.status(400).json({
+        error: `Could not extract text from "${filename}". Please make sure the file contains readable text and is not empty or password-protected.`,
+      });
     }
 
     const existingResumes = db.getResumesByStudentId(userId);
     const isFirst = existingResumes.length === 0;
+    const isExplicitReplace = req.body?.replace === true || req.body?.replace === 'true' || req.query?.replace === 'true';
 
-    const resumeId = `res-${Date.now()}`;
-    const resumeTextToParse =
-      rawText ||
-      fileContent ||
-      `${user.displayName || 'Candidate'}\n${user.email || ''}\nResume: ${filename}`;
+    // If replacing, demote previous primary resumes for this student
+    if (isExplicitReplace || isFirst) {
+      for (const r of existingResumes) {
+        if (r.isPrimary) {
+          db.updateResume(r.id, { isPrimary: false });
+        }
+      }
+    }
 
-    // Perform AI extraction
-    const { extracted, source } = await parseResumeWithAI(resumeTextToParse, filename);
+    const resumeId = `res-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
 
-    // Calculate ATS score from actual extracted resume competencies
+    // Perform AI parsing
+    const { extracted, source } = await parseResumeWithAI(resumeText, filename);
+
+    // Calculate ATS score from detected resume competencies
     const detectedSkillCount = extracted.skills?.length || 0;
     const hasEducation = (extracted.education?.length || 0) > 0;
     const hasExperience = (extracted.experience?.length || 0) > 0;
@@ -86,7 +182,7 @@ router.post('/upload', async (req: Request, res: Response) => {
       filename,
       fileSize: fileSize || 142000,
       fileReference: `/uploads/${filename}`,
-      isPrimary: isFirst,
+      isPrimary: isFirst || isExplicitReplace,
       atsScore: overallScore,
       processingStatus: 'completed',
       extractedData: extracted,
@@ -116,7 +212,7 @@ router.post('/upload', async (req: Request, res: Response) => {
         weaknesses: extracted.weaknesses || ['Could feature more commercial cloud deployment details'],
         careerReadinessSuggestions: ['Ready for technical phone screens and foundational software engineering rounds.'],
       },
-      rawText: resumeTextToParse,
+      rawText: resumeText,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -146,7 +242,6 @@ router.post('/upload', async (req: Request, res: Response) => {
         ? extracted.certifications
         : studentProfile.certifications;
 
-      // Calculate profile completeness based on populated fields
       let filled = 10;
       if (extracted.headline || studentProfile.headline) filled += 15;
       if (mergedSkills.length >= 3) filled += 20;
@@ -157,7 +252,7 @@ router.post('/upload', async (req: Request, res: Response) => {
 
       db.createOrUpdateStudentProfile(userId, {
         skills: mergedSkills,
-        headline: extracted.headline || studentProfile.headline || 'Software Engineer',
+        headline: extracted.headline || studentProfile.headline || (mergedSkills.length ? `${mergedSkills.slice(0, 2).join(' & ')} Developer` : 'Software Engineer'),
         education: updatedEducation,
         experience: updatedExperience,
         projects: updatedProjects,
@@ -171,7 +266,7 @@ router.post('/upload', async (req: Request, res: Response) => {
     db.logAiUsage({
       userId,
       feature: 'Resume Parsing & Extraction',
-      model: 'gemini-3.8-flash',
+      model: 'gemini-2.5-flash',
       inputTokens: 1100,
       outputTokens: 720,
       status: source === 'gemini' ? 'success' : 'fallback',
@@ -191,7 +286,8 @@ router.post('/upload', async (req: Request, res: Response) => {
       resume: newResume,
     });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Upload processing failed' });
+    console.error('Resume upload error:', err?.message || err);
+    return res.status(400).json({ error: err.message || 'Failed to process resume file.' });
   }
 });
 
@@ -231,10 +327,13 @@ router.put('/:id/extracted', (req: Request, res: Response) => {
   return res.json({ message: 'Extracted resume data updated', resume: updatedResume });
 });
 
-// Delete Resume
+// Delete Resume (with protection for demo account)
 router.delete('/:id', (req: Request, res: Response) => {
   const resume = db.getResumeById(req.params.id);
   if (!checkResumeOwnership(req, res, resume, false)) return;
+  if (resume.id === 'res-alex-1' || resume.studentId === 'user-student-1') {
+    return res.status(403).json({ error: 'The demo student resume is protected and cannot be deleted.' });
+  }
   const deleted = db.deleteResume(req.params.id);
   return res.json({ success: deleted });
 });

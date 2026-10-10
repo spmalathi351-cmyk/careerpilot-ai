@@ -134,7 +134,7 @@ Return a strictly valid JSON object matching this schema:
 
       const response = await withTimeout(
         ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config: {
             responseMimeType: 'application/json',
@@ -167,8 +167,18 @@ Return a strictly valid JSON object matching this schema:
 
   // Candidate name from top line or filename
   let name = lines[0] ? lines[0].replace(/[|•,].*$/, '').trim() : '';
+  if (!name || name.includes('@') || /^(resume|curriculum vitae|cv|professional resume)$/i.test(name) || name.length > 50) {
+    if (lines.length > 1 && !lines[1].includes('@') && !/^(resume|curriculum vitae|cv)$/i.test(lines[1]) && lines[1].length < 50) {
+      name = lines[1].replace(/[|•,].*$/, '').trim();
+    }
+  }
   if (!name || name.includes('@') || name.length > 50) {
-    name = filename.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ').trim();
+    name = filename
+      .replace(/\.[^/.]+$/, '')
+      .replace(/\s*\(\d+\)/g, '')
+      .replace(/professional|resume|curriculum|vitae|draft|final/gi, '')
+      .replace(/[_-]/g, ' ')
+      .trim();
   }
 
   // Headline from 2nd line if present
@@ -179,12 +189,13 @@ Return a strictly valid JSON object matching this schema:
 
   // Extract skills strictly by detecting technical keywords present in the text
   const knownTechKeywords = [
-    'TypeScript', 'JavaScript', 'Python', 'Java', 'C++', 'C#', 'Go', 'Rust', 'Ruby', 'PHP', 'Swift', 'Kotlin',
+    'TypeScript', 'JavaScript', 'Python', 'Java', 'C++', 'C', 'C#', 'Go', 'Rust', 'Ruby', 'PHP', 'Swift', 'Kotlin',
     'React', 'Node.js', 'Express', 'Vue', 'Angular', 'Next.js', 'Django', 'Flask', 'FastAPI', 'Spring Boot',
-    'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'SQLite', 'Oracle', 'GraphQL', 'REST APIs', 'REST',
+    'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'SQLite', 'Oracle', 'GraphQL', 'REST APIs', 'REST', 'SQL',
     'Docker', 'Kubernetes', 'AWS', 'GCP', 'Azure', 'Linux', 'Git', 'CI/CD', 'GitHub Actions',
     'Tailwind CSS', 'Bootstrap', 'HTML', 'CSS', 'Sass', 'Webpack', 'Vite', 'Redux', 'Jest',
     'Machine Learning', 'Deep Learning', 'PyTorch', 'TensorFlow', 'NLP', 'Computer Vision', 'Pandas', 'NumPy',
+    'Data Structures', 'Algorithms',
     'System Design', 'Microservices', 'Distributed Systems', 'Agile', 'Scrum'
   ];
 
@@ -344,7 +355,7 @@ Evaluate compatibility and return a strictly valid JSON object matching:
 
       const response = await withTimeout(
         ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config: {
             responseMimeType: 'application/json',
@@ -458,14 +469,17 @@ Return valid JSON array of objects matching:
   }
 ]`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.2,
-        },
-      });
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.2,
+          },
+        }),
+        3500
+      );
 
       const parsed = safeJsonParse<CareerRoleRecommendation[]>(response.text || '');
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -604,14 +618,17 @@ Return a valid JSON array of 3 milestone objects matching:
   }
 ]`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.2,
-        },
-      });
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.2,
+          },
+        }),
+        3500
+      );
 
       const parsed = safeJsonParse<CareerRoadmapMilestone[]>(response.text || '');
       if (Array.isArray(parsed) && parsed.length === 3) {
@@ -730,7 +747,7 @@ Return a valid JSON array of objects:
 ]`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -850,7 +867,7 @@ Evaluate the answer thoroughly and return a valid JSON object matching:
 }`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -918,7 +935,7 @@ Return only the improved text with no quotes, commentary, or markdown wrapper.`;
 
       const response = await withTimeout(
         ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config: {
             temperature: 0.3,
@@ -979,7 +996,7 @@ Return a valid JSON object matching:
 }`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -1050,7 +1067,7 @@ Return valid JSON:
 }`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -1322,7 +1339,7 @@ ${contextPrompt}
 
   // Attempt generation with Gemini models
   if (ai) {
-    const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest'];
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-flash-latest'];
     for (const modelName of modelsToTry) {
       try {
         const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];

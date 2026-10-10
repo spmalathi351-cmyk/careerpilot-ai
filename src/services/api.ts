@@ -176,7 +176,26 @@ export const api = {
     return this.request<{ resume: Resume }>(`/api/resumes/${id}`);
   },
 
-  uploadResume(data: { filename: string; fileSize?: number; rawText?: string }) {
+  uploadResume(data: FormData | { filename: string; fileSize?: number; rawText?: string; fileBase64?: string; replace?: boolean }) {
+    if (data instanceof FormData) {
+      const token = this.getToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      return fetch('/api/resumes/upload', {
+        method: 'POST',
+        headers,
+        body: data,
+      }).then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || errData.message || 'Upload failed');
+        }
+        return res.json() as Promise<{ message: string; resume: Resume }>;
+      });
+    }
+
     return this.request<{ message: string; resume: Resume }>('/api/resumes/upload', {
       method: 'POST',
       body: JSON.stringify(data),
